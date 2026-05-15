@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+
+# General/System
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+.__MACOSX
