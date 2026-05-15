@@ -1,0 +1,26 @@
+[project]
+name = "thesis-clustering"
+version = "0.1.0"
+description = "Comparison of crisp and fuzzy clustering algorithms for MSc thesis"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "scikit-learn>=1.3",
+    "matplotlib>=3.7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "jupyter>=1.0",
+    "ipykernel>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fuzzyclust"]
