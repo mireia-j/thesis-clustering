@@ -1,25 +1,6 @@
-"""Base class for fuzzy clustering algorithms, with Fuzzy C-Means as the
-first concrete implementation.
-
-Design idea
------------
-Every fuzzy clustering algorithm ends up producing a *membership matrix*
-`u` of shape (n_samples, n_clusters). Once that exists, the useful
-operations are the same regardless of how `u` was computed:
-
-    - hard labels        -> argmax(u, axis=1)
-    - predict new points -> membership w.r.t. the cluster centers
-
-What differs between algorithms is *how* `u` is produced. FCM does it with
-an iterative centers <-> memberships update; agglomerative hierarchical
-clustering does it by merging from the bottom up and cutting the tree.
-
-So the base class owns the shared state + behaviour and exposes a single
-abstract hook, `fit`, that each algorithm implements its own way.
-"""
-
 import numpy as np
 from scipy.spatial.distance import cdist
+import matplotlib.pyplot as plt
 
 class BaseFuzzyClustering:
 
@@ -43,7 +24,7 @@ class BaseFuzzyClustering:
         u = rng.rand(n_samples, self.n_clusters)
         return u / u.sum(axis=1, keepdims=True)
 
-    def next_centers(self, X, u): # CHECK
+    def next_centers(self, X, u): 
         um = u ** self.m
         return (X.T @ um / np.sum(um, axis=0)).T
 
@@ -52,7 +33,7 @@ class BaseFuzzyClustering:
         return self._predict(X)
 
     def _predict(self, X):
-        power = float(2 / (self.m - 1))
+        power = float(1 / (self.m - 1))
         dist = cdist(X, self.centers) ** power
         denominator_ = dist.reshape((X.shape[0], 1, -1)).repeat(dist.shape[-1], axis=1)
         denominator_ = dist[:, :, np.newaxis] / denominator_
@@ -76,6 +57,36 @@ class BaseFuzzyClustering:
 
     def fit_predict(self, X):
         self.fit(X)
-        return self.labels
+        return self.labels()
+    
+
+
+def plot_2(result_fuzzy, X, show_centers=True):
+    """Fit on X (must have exactly 2 features) and scatter the points
+    coloured by their assigned cluster."""
+    if result_fuzzy.centers.shape[1] != 2:
+        raise ValueError(
+            f"plot() needs 2-D data of shape (n_samples, 2); got {X.shape}."
+        )
+     
+    if result_fuzzy.centers is None:
+        raise ValueError("Not fitted yet. Call fit() first.")
+
+    labels = result_fuzzy.labels()        
+    if len(labels) != X.shape[0]:
+        raise ValueError("Number of samples in X does not match number labels.")
+
+    fig, ax = plt.subplots()
+    ax.scatter(X[:, 0], X[:, 1], c=labels, cmap="viridis", s=15, alpha=0.7)
+
+    if show_centers:
+        ax.scatter(result_fuzzy.centers[:, 0], result_fuzzy.centers[:, 1],
+                    c="red", marker="X", s=200, edgecolors="black",
+                    label="centers")
+        ax.legend()
+
+    ax.set_title(f"{type(result_fuzzy).__name__} — {result_fuzzy.n_clusters} clusters")
+    plt.show()
+    return ax
 
 

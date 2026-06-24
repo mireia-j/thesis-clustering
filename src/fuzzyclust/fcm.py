@@ -1,15 +1,10 @@
 import numpy as np
+from sklearn.metrics import adjusted_rand_score
 
-from fuzzyclust.base import BaseFuzzyClustering
+from fuzzyclust.base import BaseFuzzyClustering, plot_2
 
 class FCM(BaseFuzzyClustering):
-    """Fuzzy C-Means.
-
-    Identical behaviour to the reference implementation, just split so the
-    generic parts live in the base class. The only FCM-specific logic is the
-    iterative update in fit() and the weighted-centroid computation.
-    """
-
+    """Fuzzy C-Means."""
     def fit(self, X):
         u = self._init_membership(X.shape[0])
         for _ in range(self.max_iter):
@@ -43,15 +38,23 @@ class FCM(BaseFuzzyClustering):
 
 
 if __name__ == "__main__":
-    # quick smoke test
     rng = np.random.RandomState(0)
     X = np.vstack([rng.randn(100, 2) - 4,
                    rng.randn(100, 2),
                    rng.randn(100, 2) + 4])
+    
+    true_labels = np.array([0] * 100 + [1] * 100 + [2] * 100)
+
 
     fcm = FCM(n_clusters=3)
     fcm.fit(X)
-    print("centers:\n", fcm.centers)
-    print("labels (first 10):", fcm.labels)
-    X2 = np.array([[0.0, 0.0]])
-    print("predict new point [0,0]:", fcm.predict(X2))
+    # print("centers:\n", fcm.centers.shape[1])
+    # print("labels (first 10):", fcm.labels())
+    # X2 = np.array([[0.0, 0.0]])
+    # print("predict new point [0,0]:", fcm.predict(X2))
+
+    # plot_2(fcm, X)
+
+    # result_ari = adjusted_rand_score(true_labels, fcm.labels())
+    # print("Adjusted Rand Index:", result_ari)
+    
