@@ -1,9 +1,4 @@
 import numpy as np
-from sklearn.metrics import adjusted_rand_score
-
-from fuzzyclust.base import BaseFuzzyClustering, plot_2
-
-import numpy as np
 from scipy.spatial.distance import cdist
 from sklearn.metrics import adjusted_rand_score
 
@@ -101,9 +96,6 @@ class eFCM(BaseFuzzyClustering):
             det = max(np.linalg.det(P), 0.0)
             radii[i] = (beta / n_clusters) * det ** (1.0 / (2 * n))
 
-            # BORRAR
-            if i == 1:
-                print(f"Cluster {i}: det(P)={det:.4f}, radius={radii[i]:.4f}")
         return radii
 
     def modified_sq_distances(self, X, centers, radii):

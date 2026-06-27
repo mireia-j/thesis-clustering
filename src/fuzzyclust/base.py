@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.spatial.distance import cdist
 import matplotlib.pyplot as plt
+from sklearn.metrics import adjusted_rand_score
 
 class BaseFuzzyClustering:
 
@@ -58,7 +59,61 @@ class BaseFuzzyClustering:
     def fit_predict(self, X):
         self.fit(X)
         return self.labels()
+
+class BaseKanzawa(BaseFuzzyClustering):
+    """Shared base for the QFCM / YFCM / eQFCM family (Kanzawa, 2024).
+
+    These algorithms all share Algorithm 1's alternating-optimisation loop
+    and differ only in how the cluster-size controller `alpha` (Step 3) and
+    the membership `U` (Step 4) are updated. Subclasses implement those two
+    methods; everything else lives here.
+
+    Parameter mapping to the paper:
+        n_clusters -> C
+        m          -> B-parameter / fuzzifier (> 1)
+        lambda_    -> regularizing parameter lambda (> 0)
+        error      -> stopping threshold on ||U_new - U_old||
+
+    Note: `alpha` is a *learned* attribute set during fit(), not a
+    constructor argument.
+    """
+
+    def __init__(self, n_clusters=10, m=2, lambda_=1.0, max_iter=150,
+                 error=1e-5, random_state=42):
+        super().__init__(n_clusters=n_clusters, m=m, max_iter=max_iter,
+                         error=error, random_state=random_state)
+        self.lambda_ = lambda_
+        self.alpha = None          # cluster size controllers, shape (C,)
+
+    def fit(self, X):
+        X = np.asarray(X, dtype=float)
+        u = self._init_membership(X.shape[0])                 # Step 1
+        self.alpha = np.full(self.n_clusters, 1.0 / self.n_clusters)
+        for _ in range(self.max_iter):
+            u_old = u
+            self.centers = self.next_centers(X, u)            # Step 2
+            D = cdist(X, self.centers, metric="sqeuclidean")  # d_ik
+            self.alpha = self.update_alpha(u, D)              # Step 3
+            u = self.update_membership(D)                     # Step 4
+            if np.linalg.norm(u - u_old) < self.error:        # Step 5
+                break
+        self.u = u
+        return self
+
+    # Subclasses must implement these two.
+    def update_alpha(self, u, D):
+        raise NotImplementedError
+
+    def update_membership(self, D):
+        raise NotImplementedError
+
+    # predict()/labels() use the fuzzy classification function, which is just
+    # the membership update evaluated at a new point's distances.
+    def _predict(self, X):
+        D = cdist(X, self.centers, metric="sqeuclidean")
+        return self.update_membership(D)
     
+
 
 
 def plot_2(result_fuzzy, X, show_centers=True):
