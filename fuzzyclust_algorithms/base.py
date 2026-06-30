@@ -8,7 +8,7 @@ class BaseFuzzyClustering:
     def __init__(self, n_clusters=10, m=2, max_iter=150, error=1e-5,
                  random_state=42, merge=False, epsilon_1=0.01):
         self.n_clusters = n_clusters
-        self.n_clusters_init = n_clusters  # keep track of the initial number of clusters
+        self.n_clusters_init = n_clusters  # starting M^(0)
         self.m = m                  # fuzzifier (>1)
         self.max_iter = max_iter
         self.error = error
@@ -154,3 +154,32 @@ class BaseKanzawa(BaseFuzzyClustering):
 
     def update_membership(self, D):
         raise NotImplementedError
+    
+
+def plot_2(result_fuzzy, X, show_centers=True):
+    """Fit on X (must have exactly 2 features) and scatter the points
+    coloured by their assigned cluster."""
+    if result_fuzzy.centers.shape[1] != 2:
+        raise ValueError(
+            f"plot() needs 2-D data of shape (n_samples, 2); got {X.shape}."
+        )
+     
+    if result_fuzzy.centers is None:
+        raise ValueError("Not fitted yet. Call fit() first.")
+
+    labels = result_fuzzy.labels()        
+    if len(labels) != X.shape[0]:
+        raise ValueError("Number of samples in X does not match number labels.")
+
+    fig, ax = plt.subplots()
+    ax.scatter(X[:, 0], X[:, 1], c=labels, cmap="viridis", s=15, alpha=0.7)
+
+    if show_centers:
+        ax.scatter(result_fuzzy.centers[:, 0], result_fuzzy.centers[:, 1],
+                    c="red", marker="X", s=200, edgecolors="black",
+                    label="centers")
+        ax.legend()
+
+    ax.set_title(f"{type(result_fuzzy).__name__} — {result_fuzzy.n_clusters} clusters")
+    plt.show()
+    return ax

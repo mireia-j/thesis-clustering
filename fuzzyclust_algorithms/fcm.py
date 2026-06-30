@@ -2,7 +2,7 @@ import numpy as np
 from scipy.spatial.distance import cdist
 from sklearn.metrics import adjusted_rand_score
 
-from base import BaseFuzzyClustering
+from base import BaseFuzzyClustering, plot_2
 
 class FCM(BaseFuzzyClustering):
     """Fuzzy C-Means."""
@@ -37,9 +37,11 @@ if __name__ == "__main__":
 
     true_labels = np.array([0] * 100 + [1] * 100 + [2] * 100)
 
-    model = FCM(n_clusters=10, merge=True)
+    model = FCM(n_clusters=5, merge=False)
     model.fit(X)
 
     print(f"started with {model.n_clusters_init} clusters, "
           f"ended with {model.n_clusters}")
     print("ARI vs true labels:", adjusted_rand_score(true_labels, model.labels()))
+
+    plot_2(model, X)
