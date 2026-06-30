@@ -2,7 +2,10 @@ import numpy as np
 from scipy.spatial.distance import cdist
 from sklearn.metrics import adjusted_rand_score
 
-from fuzzyclust.base import plot_2, BaseKanzawa
+try:
+    from fuzzyclust.base import plot_2, BaseKanzawa
+except ImportError:
+    from base import plot_2, BaseKanzawa
 
 class QFCM(BaseKanzawa):
     """q-divergence-based FCM (Miyamoto et al., 2008)"""

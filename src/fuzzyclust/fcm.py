@@ -1,7 +1,11 @@
 import numpy as np
 from sklearn.metrics import adjusted_rand_score
 
-from fuzzyclust.base import BaseFuzzyClustering, plot_2
+try:
+    from fuzzyclust.base import plot_2, BaseFuzzyClustering
+except ImportError:
+    from base import plot_2, BaseFuzzyClustering
+    
 
 class FCM(BaseFuzzyClustering):
     """Fuzzy C-Means."""
@@ -17,6 +21,7 @@ class FCM(BaseFuzzyClustering):
         return self
     
 
+# BORRAR
 # ----------------------------------------------------------------------
 # Sketch of where agglomerative hierarchical clustering plugs in.
 # You implement fit() however the algorithm works (build the merge tree,
