@@ -1,8 +1,12 @@
 import numpy as np
 from scipy.spatial.distance import cdist
 from sklearn.metrics import adjusted_rand_score
+from sklearn import datasets
 
-from base import BaseFuzzyClustering, plot_2
+try:
+    from base import plot_2, BaseFuzzyClustering   
+except ImportError:
+    from fuzzyclust_algorithms.base import plot_2, BaseFuzzyClustering
 
 
 class eFCM(BaseFuzzyClustering):
@@ -16,9 +20,9 @@ class eFCM(BaseFuzzyClustering):
     """
         
     def __init__(self, n_clusters=10, m=2, max_iter=150,
-                 error=1e-5, random_state=42, merge=False, epsilon_1=0.01):
+                 error=1e-5, random_state=42, merge=False, epsilon_1=0.01, distance_metric='euclidean'):
         super().__init__(n_clusters=n_clusters, m=m, max_iter=max_iter,
-                         error=error, random_state=random_state, merge=merge, epsilon_1=epsilon_1)
+                         error=error, random_state=random_state, merge=merge, epsilon_1=epsilon_1, distance_metric=distance_metric)
 
         self.radii = None                  
         self.beta_ = 1.0   # beta^(0)
@@ -32,8 +36,9 @@ class eFCM(BaseFuzzyClustering):
         for _ in range(self.max_iter):
             u_old = u
             self.centers = self.next_centers(X, u)
-            self.radii = self.covariance_radius(X, u) # Step 2
-            d2_mod = self.modified_sq_distances(X) # Step 3
+            P = self.covariance_matrix(X, u) 
+            self.radii = self.radius_centers(P) 
+            d2_mod = self.modified_sq_distances(X, u, P=P) 
             u = self.update_membership(d2_mod) # Step 4
             u, merged = self.merge_clusters(u)                     
             if not merged and u.shape == u_old.shape:         
@@ -42,36 +47,44 @@ class eFCM(BaseFuzzyClustering):
 
         self.u = u
         return self
-
-    def covariance_radius(self, X, u):
-        """Step 2: fuzzy covariance P_i (eq. 2) and volume-prototype radius.
-
-        For E-FCM the radius is the geometric-mean radius that preserves the
-        cluster volume (eq. 17), scaled by the gradual-growth factor beta/M:
-
-            r_i = (beta / M) * sqrt(|P_i|^(1/n))
+    
+    def radius_centers(self, P):
+        """Volume-prototype radius r_i (Step 2).
+    
+            r_i = beta * sqrt( |P_i|^(1/n) / M )
+    
+        Parameters
+        ----------
+        P    : (C, n, n) covariances from covariance_matrix().
+    
+        Returns
+        -------
+        r : (C,) array of radii.
         """
-        n = X.shape[1]                             # number of features
-        radii = np.zeros(self.n_clusters)
-        for i in range(self.n_clusters):
-            um = u[:, i] ** self.m                 # (u_ik)^m, shape (N,)
-            denom = um.sum()
-            if denom <= 1e-12:           
-                radii[i] = 0.0
-                continue
-            diff = X - self.centers[i]                   # (x_k - v_i), shape (N, n)
-            P = (um[:, None] * diff).T @ diff / denom    # eq. (2), (n, n)
-            det = max(np.linalg.det(P), 0.0)
-            radii[i] = (self.beta_ / self.n_clusters) * det ** (1.0 / (2 * n))
+        P = np.asarray(P, dtype=float)
+        C, n, _ = P.shape
+        vol = np.abs(np.linalg.det(P)) ** (1.0 / n)          # |P_i|^(1/n), (C,)
+        return (self.beta_ / C) * np.sqrt(vol)
 
-        return radii
-
-    def modified_sq_distances(self, X):
+    def modified_sq_distances(self, X, u, P=None): # REVISAR
+        """E-GK modified distance: Mahalanobis minus volume-prototype radius.
+        
+        d~_ik = max(0, d_ik - r_i)
+        
+        Returns
+        -------
+        D : (N, C) array.
         """
-            d~_ik^2 = max(0, ||x_k - v_i||^2 - r_i^2)
-        """
-        d2 = self.distance_squared(X)        
-        return np.maximum(0.0, d2 - self.radii[None, :] ** 2)
+        d = self.distance(X, u, P=P)                    # (N, C)
+        C = self.centers.shape[0]
+        
+        # Subtract radius per cluster (broadcast r from (C,) to (N, C))
+        return np.maximum(0.0, d - self.radii[np.newaxis, :])
+        # or equivalently, explicitly per cluster:
+        # D = np.empty_like(d)
+        # for i in range(C):
+        #     D[:, i] = np.maximum(0.0, d[:, i] - self.radii[i])
+        # return D
 
     def update_membership(self, d2_mod):
         N, C = d2_mod.shape
@@ -116,4 +129,35 @@ if __name__ == "__main__":
           f"ended with {model.n_clusters}")
     print("ARI vs true labels:", adjusted_rand_score(true_labels, model.labels()))
 
-    plot_2(model, X)
+    # plot_2(model, X)
+
+
+
+    n_samples = 1500
+    X, y = datasets.make_blobs(n_samples=n_samples, random_state=170)
+    transformation = [[0.6, -0.6], [-0.4, 0.8]]
+    X_aniso = np.dot(X, transformation)
+
+    model_2 = eFCM(n_clusters=10, merge=True, random_state=0, distance_metric='mahalanobis')
+    model_2.fit(X_aniso)
+    plot_2(model_2, X_aniso)
+
+
+    # EXAMPLE 3 (Mahalanobis distance)
+    def line_1(x):
+        y = (1-4*x)/5
+        return np.column_stack((x, y))  # shape (n, 2)
+    
+    def line_2(x):
+        y = 2*x
+        return np.column_stack((x, y))  # shape (n, 2)
+    
+    x_values = np.random.uniform(-1, 1, 100)
+    line_eq_1 = line_1(x_values)
+    line_eq_2 = line_2(x_values)
+
+    X_3 = np.vstack((line_eq_1, line_eq_2))
+
+    # model_3 = eFCM(n_clusters=2, merge=False, random_state=42, distance_metric='mahalanobis')
+    # model_3.fit(X_3)
+    # plot_2(model_3, X_3)
