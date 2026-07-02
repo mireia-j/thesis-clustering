@@ -52,9 +52,9 @@ if __name__ == "__main__":
     transformation = [[0.6, -0.6], [-0.4, 0.8]]
     X_aniso = np.dot(X, transformation)
 
-    model_2 = QFCM(n_clusters=3, merge=False, random_state=42, distance_metric='mahalanobis')
-    model_2.fit(X_aniso)
-    plot_2(model_2, X_aniso)
+    # model_2 = QFCM(n_clusters=10, merge=True, random_state=0, distance_metric='mahalanobis', epsilon_1=0.00005)
+    # model_2.fit(X_aniso)
+    # plot_2(model_2, X_aniso)
 
 
     # EXAMPLE 3 (Mahalanobis distance)
@@ -73,6 +73,6 @@ if __name__ == "__main__":
 
     X_3 = np.vstack((line_eq_1, line_eq_2))
 
-    # model_3 = FCM(n_clusters=2, merge=False, random_state=100, distance_metric='mahalanobis', epsilon_1=0.00005)
-    # model_3.fit(X_3)
-    # plot_2(model_3, X_3)
+    model_3 = QFCM(n_clusters=10, merge=True, random_state=100, distance_metric='mahalanobis', epsilon_1=0.00005)
+    model_3.fit(X_3)
+    plot_2(model_3, X_3)

@@ -46,7 +46,7 @@ class BaseFuzzyClustering:
         if self.distance_metric == "euclidean":
             return cdist(X, self.centers, metric="euclidean")
         else:
-            return self.distance_gk(X, u, P=P)
+            return self.distance_gk(X, u, P=P, squared=False)
             # return cdist(X, self.centers, metric="mahalanobis", VI=self.inverse_covariance(X, self.centers))
 
     def distance_squared(self, X, u=None):
@@ -54,7 +54,7 @@ class BaseFuzzyClustering:
         if self.distance_metric == "euclidean":
             return cdist(X, self.centers, metric="sqeuclidean")
         else:
-            return self.distance_gk(X, u)
+            return self.distance_gk(X, u, squared=True)
 
     # This is in case we want to use Mahalanobis distance for GK instead of Euclidean distance
     def covariance_matrix(self, X, u):
@@ -79,8 +79,8 @@ class BaseFuzzyClustering:
             denom = denom if denom > 0 else np.finfo(float).eps
             P[i] = (diff * w[:, None]).T @ diff / denom      # (n, n)
         return P
-
-    def distance_gk(self, X, u, P=None, reg=1e-10):
+    
+    def distance_gk(self, X, u, P=None, reg=1e-10, squared=False):
         """Mahalanobis distance (inner part of E-GK, before radius subtraction).
         
         A_i  = |P_i|^(1/n) * P_i^{-1}
@@ -96,20 +96,17 @@ class BaseFuzzyClustering:
         
         if P is None:
             P = self.covariance_matrix(X, u)                # (C, n, n)
-        
+
         D = np.empty((N, C))
         for i in range(C):
-            diff = X - self.centers[i]                      # (N, n)
-            Pi = P[i] + reg * np.eye(n)
-            vol = np.abs(np.linalg.det(Pi)) ** (1.0 / n)    # |P_i|^(1/n)
-            A = vol * np.linalg.inv(Pi)                     # norm matrix A_i
-            maha2 = np.einsum("kj,jl,kl->k", diff, A, diff)  # (x-v)^T A (x-v)
-            # REVISAR porque igual hay que quirar el sqrt
-            D[:, i] = np.sqrt(np.maximum(maha2, 0.0))       # sqrt, shape (N,)
-        return D                                             # (N, C)
+            diff = X - self.centers[i]   # (N, n)
+            Pi = P[i] + reg * np.eye(n)  
+            vol = np.abs(np.linalg.det(Pi)) ** (1.0 / n)  # |P_i|^(1/n)
+            A = vol * np.linalg.inv(Pi)       # norm matrix A_i
+            maha2 = np.maximum(np.einsum("kj,jl,kl->k", diff, A, diff), 0.0)  # (x-v)^T A (x-v)
+            D[:, i] = maha2 if squared else np.sqrt(maha2)   # <-- key line
+        return D   # (N, C)
 
-
-    
     # For the merging of clusters
     @staticmethod
     def most_similar_pair(u):
