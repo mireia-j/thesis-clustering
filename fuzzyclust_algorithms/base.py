@@ -6,7 +6,7 @@ from sklearn.metrics import adjusted_rand_score
 class BaseFuzzyClustering:
 
     def __init__(self, n_clusters=10, m=2, max_iter=150, error=1e-5,
-                 random_state=42, merge=False, epsilon_1=0.01, distance_metric='euclidean'):
+                 random_state=42, merge=False, epsilon_1=0.01, distance_metric='euclidean', threshold_merge=0.25):
         self.n_clusters = n_clusters
         self.n_clusters_init = n_clusters  # starting M^(0)
         self.m = m                  # fuzzifier (>1)
@@ -20,6 +20,7 @@ class BaseFuzzyClustering:
         self.merge = merge
         self.epsilon_1 = epsilon_1
         self.prev_max_sim = 1.0   # S^(0)
+        self.threshold_merge = threshold_merge # it can be a fixed value (decimal number between 0 and 1) or "original" or "new" (see threshold_alpha())
 
         self.u = None               # membership matrix, shape (N, C)
         self.centers = None         # cluster centers, shape (C, n_features)
@@ -42,7 +43,6 @@ class BaseFuzzyClustering:
 
     # Distance methods
     def distance(self, X, u=None, P=None):
-        # return cdist(X, self.centers, metric="euclidean")
         if self.distance_metric == "euclidean":
             return cdist(X, self.centers, metric="euclidean")
         else:
@@ -50,7 +50,6 @@ class BaseFuzzyClustering:
             # return cdist(X, self.centers, metric="mahalanobis", VI=self.inverse_covariance(X, self.centers))
 
     def distance_squared(self, X, u=None):
-        # return cdist(X, self.centers, metric="sqeuclidean")
         if self.distance_metric == "euclidean":
             return cdist(X, self.centers, metric="sqeuclidean")
         else:
@@ -134,7 +133,7 @@ class BaseFuzzyClustering:
         if self.merge and C > 1:
             (i_, j_), max_sim = self.most_similar_pair(u)
             if abs(max_sim - self.prev_max_sim) < self.epsilon_1:
-                threshold = 1.0 / (C - 1)
+                threshold = self.calculate_threshold_merge(C)
                 if max_sim > threshold:
                     u = u.copy()
                     u[:, i_] = u[:, i_] + u[:, j_]   # fold j* into i*
@@ -150,6 +149,18 @@ class BaseFuzzyClustering:
         """eFCM overrides to enlarge prototypes (beta)"""
         pass
     
+    def calculate_threshold_merge(self, C):
+        """Threshold alpha that controls when merging is allowed"""
+        if C <= 2:
+            # The number of total clusters is 2 (minimum), no more merging is possible
+            return 1.0
+        
+        if self.threshold_merge == "original":
+            return 1.0 / (C - 1)
+        elif self.threshold_merge == "new":
+            return 1 / (1 + np.exp(0.3 * C - 2))
+        else:
+            return self.threshold_merge
 
     def predict(self, X):
         if len(X.shape) == 1:
@@ -187,9 +198,9 @@ class BaseKanzawa(BaseFuzzyClustering):
     """
 
     def __init__(self, n_clusters=10, m=2, lambda_=1.0, max_iter=150,
-                 error=1e-5, random_state=42, merge=False, epsilon_1=0.01, distance_metric='euclidean'):
+                 error=1e-5, random_state=42, merge=False, epsilon_1=0.01, threshold_merge="original", distance_metric='euclidean'):
         super().__init__(n_clusters=n_clusters, m=m, max_iter=max_iter,
-                         error=error, random_state=random_state, merge=merge, epsilon_1=epsilon_1, distance_metric=distance_metric)
+                         error=error, random_state=random_state, merge=merge, epsilon_1=epsilon_1, threshold_merge=threshold_merge, distance_metric=distance_metric)
         self.lambda_ = lambda_
         self.alpha = None          # cluster size controllers, shape (C,)
 

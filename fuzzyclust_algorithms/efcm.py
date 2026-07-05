@@ -20,9 +20,9 @@ class eFCM(BaseFuzzyClustering):
     """
         
     def __init__(self, n_clusters=10, m=2, max_iter=150,
-                 error=1e-5, random_state=42, merge=False, epsilon_1=0.01, distance_metric='euclidean'):
+                 error=1e-5, random_state=42, merge=False, epsilon_1=0.01, threshold_merge="original", distance_metric='euclidean'):
         super().__init__(n_clusters=n_clusters, m=m, max_iter=max_iter,
-                         error=error, random_state=random_state, merge=merge, epsilon_1=epsilon_1, distance_metric=distance_metric)
+                         error=error, random_state=random_state, merge=merge, epsilon_1=epsilon_1, threshold_merge=threshold_merge, distance_metric=distance_metric)
 
         self.radii = None                  
         self.beta_ = 1.0   # beta^(0)
@@ -122,12 +122,12 @@ if __name__ == "__main__":
 
     true_labels = np.array([0] * 100 + [1] * 100 + [2] * 100)
 
-    model = eFCM(n_clusters=3, merge=False)
-    model.fit(X)
+    # model = eFCM(n_clusters=3, merge=False)
+    # model.fit(X)
 
-    print(f"started with {model.n_clusters_init} clusters, "
-          f"ended with {model.n_clusters}")
-    print("ARI vs true labels:", adjusted_rand_score(true_labels, model.labels()))
+    # print(f"started with {model.n_clusters_init} clusters, "
+    #       f"ended with {model.n_clusters}")
+    # print("ARI vs true labels:", adjusted_rand_score(true_labels, model.labels()))
 
     # plot_2(model, X)
 
@@ -138,7 +138,7 @@ if __name__ == "__main__":
     transformation = [[0.6, -0.6], [-0.4, 0.8]]
     X_aniso = np.dot(X, transformation)
 
-    model_2 = eFCM(n_clusters=10, merge=True, random_state=0, distance_metric='mahalanobis')
+    model_2 = eFCM(n_clusters=10, merge=True, random_state=0, distance_metric='mahalanobis', threshold_merge=0.5)
     model_2.fit(X_aniso)
     plot_2(model_2, X_aniso)
 

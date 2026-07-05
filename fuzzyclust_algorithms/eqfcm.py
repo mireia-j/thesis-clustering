@@ -16,11 +16,11 @@ class eQFCM(BaseKanzawa):
     """
 
     def __init__(self, n_clusters=10, m1=2, m2=2, lambda1=1.0, lambda2=1.0,
-                 max_iter=150, error=1e-5, random_state=42, merge=False, epsilon_1=0.01, distance_metric='euclidean'):
+                 max_iter=150, error=1e-5, random_state=42, merge=False, epsilon_1=0.01, threshold_merge="original", distance_metric='euclidean'):
         # base `m` (used by next_centers) is the membership exponent m1
         super().__init__(n_clusters=n_clusters, m=m1, lambda_=lambda1,
                          max_iter=max_iter, error=error,
-                         random_state=random_state, merge=merge, epsilon_1=epsilon_1, distance_metric=distance_metric)
+                         random_state=random_state, merge=merge, epsilon_1=epsilon_1, threshold_merge=threshold_merge, distance_metric=distance_metric)
         self.m1 = m1
         self.m2 = m2
         self.lambda1 = lambda1
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     transformation = [[0.6, -0.6], [-0.4, 0.8]]
     X_aniso = np.dot(X, transformation)
 
-    model_2 = eQFCM(n_clusters=10, merge=True, random_state=42, distance_metric='mahalanobis', epsilon_1=0.00005)
+    model_2 = eQFCM(n_clusters=10, merge=True, random_state=42, distance_metric='mahalanobis', threshold_merge=0.7)
     model_2.fit(X_aniso)
     plot_2(model_2, X_aniso)
 
