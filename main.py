@@ -27,5 +27,17 @@ if __name__ == "__main__":
     w = np.asarray(X2).shape[0]
     print(w)
 
+results = []
+model_fcm_try = FCM(10, merge=True, random_state=0, distance_metric='mahalanobis', random_state=0, m=2.0)
+for param_alpha in ["original", "new", 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
+  m_i = copy.deepcopy(model)
+  m_i.m = param_m
+  m_i.lambda_ = param_lam
+  metrics = bootstrap_metrics(m_i, data[0], data[1],
+                                        n_boot=100, random_state=0)
 
-
+        row = {"param_m": param_m, "param_lam": param_lam}
+        for metric, (mean_val, std_val) in metrics.items():
+          row[f"{metric}_mean"] = mean_val
+          row[f"{metric}_std"] = std_val
+        results.append(row)

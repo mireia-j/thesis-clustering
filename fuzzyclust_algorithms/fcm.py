@@ -24,6 +24,7 @@ class FCM(BaseFuzzyClustering):
                 if np.linalg.norm(u - u_old) < self.error:
                     break
         self.u = u
+        self.centers = self.next_centers(X, u)
         return self
     
     def update_membership(self, D):

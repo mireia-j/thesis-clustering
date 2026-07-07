@@ -45,9 +45,10 @@ class BaseFuzzyClustering:
     def distance(self, X, u=None, P=None):
         if self.distance_metric == "euclidean":
             return cdist(X, self.centers, metric="euclidean")
-        else:
+        elif self.distance_metric == "mahalanobis":
             return self.distance_gk(X, u, P=P, squared=False)
-            # return cdist(X, self.centers, metric="mahalanobis", VI=self.inverse_covariance(X, self.centers))
+        else: 
+            raise ValueError("distance must be 'euclidean' or 'mahalanobis'")
 
     def distance_squared(self, X, u=None):
         if self.distance_metric == "euclidean":
@@ -210,15 +211,16 @@ class BaseKanzawa(BaseFuzzyClustering):
         self.alpha = np.full(self.n_clusters, 1.0 / self.n_clusters)
         for _ in range(self.max_iter):
             u_old = u
-            self.centers = self.next_centers(X, u)            # Step 2
+            self.centers = self.next_centers(X, u)           
             D = self.distance_squared(X, u)  # d_ik
-            self.alpha = self.update_alpha(u, D)              # Step 3
-            u = self.update_membership(D)                     # Step 4
-            u, merged = self.merge_clusters(u)               # optional merge
-            if not merged and u.shape == u_old.shape:         # Step 5
+            self.alpha = self.update_alpha(u, D)              
+            u = self.update_membership(D)                     
+            u, merged = self.merge_clusters(u)               
+            if not merged and u.shape == u_old.shape:         
                 if np.linalg.norm(u - u_old) < self.error:
                     break
         self.u = u
+        self.centers = self.next_centers(X, u)   
         return self
 
     # Subclasses must implement these two.

@@ -44,8 +44,8 @@ class eFCM(BaseFuzzyClustering):
             if not merged and u.shape == u_old.shape:         
                 if np.linalg.norm(u - u_old) < self.error:
                     break
-
         self.u = u
+        self.centers = self.next_centers(X, u)
         return self
     
     def radius_centers(self, P):

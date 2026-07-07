@@ -18,8 +18,8 @@ class QFCM(BaseKanzawa):
         return 1.0 - self.lambda_ * (1.0 - self.m) * D
 
     def update_alpha(self, u, D):
-        # eq. 11:  alpha_i ∝ [ sum_k u_ik^m (1 - lambda(1-m) d_ik) ]^(1/m)
-        S = ((u ** self.m) * self.factor(D)).sum(axis=0)       # (C,)
+        # alpha_i = [ sum_k u_ik^m (1 - lambda(1-m) d_ik) ]^(1/m)  /  [ sum_i sum_k u_ik^m (1 - lambda(1-m) d_ik) ]^(1/m)
+        S = ((u ** self.m) * self.factor(D)).sum(axis=0)       
         a = S ** (1.0 / self.m)
         return a / a.sum()
 
@@ -50,6 +50,7 @@ if __name__ == "__main__":
     transformation = [[0.6, -0.6], [-0.4, 0.8]]
     X_aniso = np.dot(X, transformation)
 
-    model_2 = QFCM(n_clusters=10, merge=True, random_state=0, distance_metric='mahalanobis', threshold_merge="original")
+    model_2 = QFCM(n_clusters=3, merge=False, random_state=0, m=1.05, lambda_=-100, distance_metric='mahalanobis', threshold_merge="original")
     model_2.fit(X_aniso)
-    plot_2(model_2, X_aniso)
+    # plot_2(model_2, X_aniso)
+    print(model_2.u)
