@@ -46,8 +46,6 @@ def plot_results(X, y, name_fig, title="Fuzzy Clustering Results"):
 # _________________________________________________________________
 # BOOTSTRAP METRICS
 
-METRICS = ["PC", "MPC", "PE", "XBI", "FKI", "FS", "Hom", "Comp", "V-measure", "ARS", "AMI", "Silh"]
-
 """
 The value of lambda cannot be negative.
 The value of m1 cannot be 1.
@@ -65,7 +63,7 @@ GRIDS = {
 
     "large": dict(m=[1.1, 1.3, 1.5, 1.7, 2.0],  m1=[1.1, 1.3, 1.5, 1.8, 2.0],  m2=[1.05, 1.1, 1.3, 1.5, 1.8, 2.0],
                      lam=[0.001, 0.01, 1.0, 10.0, 100.0],  lam1=[0.001, 0.01, 1.0, 10.0, 100.0],  lam2=[0.001, 0.01, 1.0, 10.0, 100.0],
-                     alpha=["original", "new", 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]),
+                     alpha=["original", "new", 0.2, 0.4, 0.6, 0.8, 0.9]),
 
     "extra_large":  dict(m=[1.05, 1.1, 1.3, 1.5, 2.0],  
                          m1=[1.3, 1.5, 1.8, 2.0],  m2=[1.05, 1.1, 1.3, 1.5, 1.8, 2.0],
@@ -150,86 +148,7 @@ def bootstrap_metrics(model, X, y, n_boot, apply_bootstrap, random_state=0, verb
     
     return (info_metrics, print_params)
 
-# BORRAR
-def create_df_FCM(model, data, n_boot=30):
-    """
-    Pass the model without fitting it yet, data is a tuple (X, y)
-    Create a DataFrame of metrics for FCM and eFCM.
-    We are not trying with various parameters, just m=2
-    Apply bootstrap and initialize U(0) differently for each resample
-    """
-    results = []
-    m_i = copy.deepcopy(model)
-    metrics = bootstrap_metrics(m_i, data[0], data[1], n_boot=n_boot, random_state=0)
 
-    row = {"param_m": 2}
-    for metric, (mean_val, std_val) in metrics.items():
-        row[f"{metric}_mean"] = mean_val
-        row[f"{metric}_std"] = std_val
-    results.append(row)
-
-    return pd.DataFrame(results)
-
-# BORRAR
-def create_df_QFCM(model, data, size):
-    """
-    Create a DataFrame of metrics for QFCM and YFCM.
-    We are varying m and lambda
-    Apply bootstrap and initialize U(0) differently for each resample
-    size: "quick", "medium", "large", "paper"
-    """
-    results = []
-    for param_lam in GRIDS[size]["lam"]:
-      for param_m in GRIDS[size]["m"]:
-        m_i = copy.deepcopy(model)
-        m_i.m = param_m
-        m_i.lambda_ = param_lam
-        metrics = bootstrap_metrics(m_i, data[0], data[1], n_boot=100, random_state=0)
-
-        row = {"param_m": param_m, "param_lam": param_lam}
-        for metric, (mean_val, std_val) in metrics.items():
-          row[f"{metric}_mean"] = mean_val
-          row[f"{metric}_std"] = std_val
-        results.append(row)
-
-    return pd.DataFrame(results)
-
-# BORRAR
-def create_df_eQFCM(model, data, size):
-    """
-    Create a DataFrame of metrics for eQFCM and YFCM.
-    We are varying m1, m2 and lambda1, lamda2
-    Apply bootstrap and initialize U(0) differently for each resample
-    size: "quick", "medium", "large", "paper"
-    """
-    results = []
-    # carry the fixed settings from the passed model; reconstruct per config
-    fixed = dict(n_clusters=model.n_clusters_init, merge=model.merge,
-                 distance_metric=model.distance_metric, epsilon_1=model.epsilon_1,
-                 max_iter=model.max_iter, error=model.error)
-
-    for param_m1 in GRIDS[size]["m1"]:
-        for param_m2 in GRIDS[size]["m2"]:
-            for param_lam1 in GRIDS[size]["lam1"]:
-                for param_lam2 in GRIDS[size]["lam2"]:
-                    m_i = copy.deepcopy(model)
-                    m_i.m1 = param_m1
-                    m_i.m2 = param_m2
-                    m_i.lambda1 = param_lam1
-                    m_i.lambda2 = param_lam2
-                    # eQFCM(m1=param_m1, m2=param_m2, lambda1=param_lam1, lambda2=param_lam2, **fixed)
-                    metrics = bootstrap_metrics(m_i, data[0], data[1],
-                                                n_boot=30, random_state=0)
-
-                    row = {"param_m1": param_m1, "param_m2": param_m2,
-                           "param_lam1": param_lam1, "param_lam2": param_lam2}
-                    for metric, (mean_val, std_val) in metrics.items():
-                        row[f"{metric}_mean"] = mean_val
-                        row[f"{metric}_std"] = std_val
-                    results.append(row)
-    return pd.DataFrame(results)
-
-# BUENA
 def create_df_params(model, data, C, dist_metric, size, n_boot, apply_bootstrap):
     """
     This function is for once it gets a model it gets what params it needs to play with from grid 
@@ -308,53 +227,78 @@ def create_df_params(model, data, C, dist_metric, size, n_boot, apply_bootstrap)
         
     return pd.DataFrame(results)
 
-def filter_extremes(df_initial):
+def filter_extremes(df_initial, dist_metric):
+    """Shortlist the most promising parameter rows from a metrics dataframe.
+
+    1. Primary condition. Keep every row satisfying
+         (MPC_mean >= 0.8 OR MPE_mean > 0.8)
+         AND (V-measure_mean >= 0.8 OR ARS_mean >= 0.8 OR AMI_mean >= 0.8)
+    2. Fallback. If the primary condition yields fewer than 4 rows, ignore it
+       and instead take the top-3 rows (highest mean) of each of MPC, MPE,
+       V-measure, ARS and AMI. Duplicates allowed here; dropped at the end.
+    3. Always add the top-3 rows (lowest mean) of XBI and FKI.
+    4. Distance metric:
+         - 'euclidean' : also add the top-3 rows (highest mean) of FS and Silh.
+         - otherwise   : drop the FS/Silh columns (mean and std) entirely.
+    5. Drop duplicate parameter combinations.
+
+    Every column access is guarded, so missing columns (e.g. MPE_mean before
+    it is wired into METRICS) are skipped rather than raising.
     """
-    This function returns the best metric values given a dataframe
-    In case there is a tie, it only returns one of the rows with that "best metric"
-    """
-    metrics_to_filter = {
-        'PC_mean': 'max',
-        'MPC_mean': 'max',
-        'PE_mean': 'min',
-        'XBI_mean': 'min',
-        'FKI_mean': 'min',
-        'FS_mean': 'max',
-        'Hom_mean': 'max',
-        'Comp_mean': 'max',
-        'V-measure_mean': 'max',
-        'ARS_mean': 'max',
-        'AMI_mean': 'max',
-        'Silh_mean': 'max'
-    }
+    df = df_initial.copy()
 
-    rows = []
+    def top(col, n=3, largest=True):
+        """Top-n rows by `col`, NaNs excluded. Empty frame if col absent."""
+        if col not in df.columns:
+            return df.iloc[0:0]
+        sub = df.dropna(subset=[col])
+        return sub.nlargest(n, col) if largest else sub.nsmallest(n, col)
 
-    for col, agg in metrics_to_filter.items():
-        if col in df_initial.columns:
-            if agg == 'max':
-                idx = df_initial[col].idxmax()
-            else:
-                idx = df_initial[col].idxmin()
+    # Step 1: primary condition
+    cond_crispness = pd.Series(False, index=df.index)
+    if 'MPC_mean' in df.columns:
+        cond_crispness |= (df['MPC_mean'] >= 0.8)
+    if 'MPE_mean' in df.columns:
+        cond_crispness |= (df['MPE_mean'] > 0.8)
 
-            filtered = df_initial.loc[[idx]].copy()
-            filtered['Reason'] = f"{agg}({col})"
-            rows.append(filtered)
+    cond_agreement = pd.Series(False, index=df.index)
+    for c in ('V-measure_mean', 'ARS_mean', 'AMI_mean'):
+        if c in df.columns:
+            cond_agreement |= (df[c] >= 0.8)
 
-    if not rows:
-        return pd.DataFrame()
+    df_cond = df[cond_crispness & cond_agreement]
 
-    df_filtered = pd.concat(rows, ignore_index=True)
-
-    param_cols = [col for col in df_filtered.columns if col.startswith('param_') or col.startswith('params_')]
-
-    # Remove duplicate parameter combinations by grouping and joining the reasons
-    if param_cols:
-        df_filtered = df_filtered.groupby(param_cols, as_index=False).agg(
-            {c: 'first' if c != 'Reason' else lambda x: ' + '.join(x.unique()) for c in df_filtered.columns if c not in param_cols}
+    # Step 2: fallback if fewer than 4 rows
+    if len(df_cond) >= 4:
+        base = df_cond
+    else:
+        base = pd.concat(
+            [top(c, 3, largest=True)
+             for c in ('MPC_mean', 'MPE_mean', 'V-measure_mean', 'ARS_mean', 'AMI_mean')]
         )
 
-    return df_filtered
+    # Step 3: always add XBI / FKI (minimisers)
+    parts = [base, top('XBI_mean', 3, largest=False), top('FKI_mean', 3, largest=False)]
+
+    # Step 4: distance-metric-specific FS / Silh handling
+    if dist_metric == 'euclidean':
+        parts += [top('FS_mean', 3, largest=True), top('Silh_mean', 3, largest=True)]
+
+    result = pd.concat(parts)
+
+    if dist_metric != 'euclidean':
+        result = result.drop(columns=[c for c in ('FS_mean', 'FS_std', 'Silh_mean', 'Silh_std')
+                                      if c in result.columns])
+
+    # Step 5: drop duplicate parameter combinations
+    param_cols = [c for c in result.columns
+                  if c.startswith('param_') or c.startswith('params_')]
+    if param_cols:
+        result = result.drop_duplicates(subset=param_cols)
+    else:
+        result = result.drop_duplicates()
+
+    return result.reset_index(drop=True)
 
 PARAM_SETTERS = {
     "param_m":    lambda mdl, v: setattr(mdl, "m", v),
@@ -365,7 +309,7 @@ PARAM_SETTERS = {
     "param_lam2": lambda mdl, v: setattr(mdl, "lambda2", v),
 }
 
-def create_df_threshold_alpha(model, df, data, n_clusters_merge, dist_metric, size, n_boot):
+def create_df_threshold_alpha(model, data, n_clusters_merge, dist_metric, size, n_boot, df=None):
     """
     model: "FCM", "eFCM", "QFCM", "YFCM" or "eQFCM"
     df: the results of a dataframe with the variation of model params and its metric results from the bootstrap process
@@ -373,7 +317,10 @@ def create_df_threshold_alpha(model, df, data, n_clusters_merge, dist_metric, si
     (via filter_extremes), then re-runs that model with merge=True while
     sweeping the alpha values in GRIDS[size]["alpha"].
     """
-    df_filtered = filter_extremes(df)
+    if df is not None or model == "FCM" or model == "eFCM":
+        df_filtered = df
+    else:
+        df_filtered = filter_extremes(df, dist_metric)
 
     param_cols = [c for c in df_filtered.columns if c.startswith("param_")]
     list_best_value = [
@@ -381,7 +328,9 @@ def create_df_threshold_alpha(model, df, data, n_clusters_merge, dist_metric, si
         for _, row in df_filtered.iterrows()
     ]
 
-    if model == "eFCM":
+    if model == "FCM":
+        base_model = FCM(n_clusters=n_clusters_merge, merge=True, distance_metric=dist_metric)
+    elif model == "eFCM":
         base_model = eFCM(n_clusters=n_clusters_merge, merge=True, distance_metric=dist_metric)
     elif model == "QFCM":
         base_model = QFCM(n_clusters=n_clusters_merge, merge=True, distance_metric=dist_metric)
@@ -390,7 +339,7 @@ def create_df_threshold_alpha(model, df, data, n_clusters_merge, dist_metric, si
     elif model == "eQFCM":
         base_model = eQFCM(n_clusters=n_clusters_merge, merge=True, distance_metric=dist_metric)
     else:
-        base_model = FCM(n_clusters=n_clusters_merge, merge=True, distance_metric=dist_metric)
+        raise ValueError("model argument must be a STRING of the form 'FCM', 'eFCM', 'QFCM', 'YFCM' or 'eQFCM' ")
 
     results = []
     for best_value in list_best_value:
