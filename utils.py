@@ -19,7 +19,7 @@ except ImportError:
     from fuzzyclust_algorithms.eqfcm import eQFCM
     
 
-def plot_results(X, y, title="Fuzzy Clustering Results"):
+def plot_results(X, y, name_fig, title="Fuzzy Clustering Results"):
   """X is the original data, y is the true labels (discrete)."""
   plt.figure(figsize=(8, 6))
   scatter = plt.scatter(
@@ -40,7 +40,7 @@ def plot_results(X, y, title="Fuzzy Clustering Results"):
   handles, labels = scatter.legend_elements()
   plt.legend(handles, [f"Cluster {i}" for i in range(3)])
 
-  plt.show()
+  plt.savefig(f"{name_fig}.png")
 
 
 # _________________________________________________________________
@@ -60,7 +60,7 @@ GRIDS = {
                    lam=[1.0],  lam1=[1.0], lam2=[1.0], alpha=["original"]),
 
     "medium": dict(m=[1.1, 1.5, 2.0],  m1=[1.1, 1.5, 2.0],  m2=[1.05, 1.1, 1.3, 1.5],
-                   lam=[0.001, 0.1, 1.0, 10.0], lam1=[0.1, 1.0, 10.0], lam2=[0.1, 1.0, 10.0],
+                   lam=[0.01, 0.1, 1.0, 10.0], lam1=[0.1, 1.0, 10.0], lam2=[0.1, 1.0, 10.0],
                    alpha=["original", "new", 0.25, 0.5, 0.75]),
 
     "large": dict(m=[1.1, 1.3, 1.5, 1.7, 2.0],  m1=[1.1, 1.3, 1.5, 1.8, 2.0],  m2=[1.05, 1.1, 1.3, 1.5, 1.8, 2.0],
@@ -82,11 +82,13 @@ GRIDS = {
                    lam2=[10.0 ** e for e in range(-15, 16, 2)]),
 }
 
-def bootstrap_metrics(model, X, y, n_boot, random_state=0, verbose=False, show_n_final=False):
+def bootstrap_metrics(model, X, y, n_boot, apply_bootstrap, random_state=0, verbose=True):
     """
     This function gets the model with its right parameters and returns the right mean and the std of the bootstrap.
     model: instance of model without fitting it yet
+    apply_bootstrap: if it is True we apply the bootstrap. If False, we only apply different initialization.
     """
+    print_params = False
     rng = np.random.RandomState(random_state)
     N = X.shape[0]
     distance_metric = model.distance_metric
@@ -94,8 +96,11 @@ def bootstrap_metrics(model, X, y, n_boot, random_state=0, verbose=False, show_n
     n_failed = 0
     show_n_final = model.merge # is for showing the initial and final values of n_clusters when merging
     for i in range(n_boot):
-        idx = rng.randint(0, N, size=N)
-        Xb, yb = X[idx], y[idx]
+        if apply_bootstrap:
+            idx = rng.randint(0, N, size=N)
+            Xb, yb = X[idx], y[idx]
+        else:
+            Xb, yb = X, y
 
         m_i = copy.deepcopy(model)
         m_i.random_state = i**2 + 1 # initialize different U(0) every time
@@ -118,9 +123,10 @@ def bootstrap_metrics(model, X, y, n_boot, random_state=0, verbose=False, show_n
             "PC": partition_coefficient(u),
             "MPC": modified_partition_coefficient(u),
             "PE": partition_entropy(u),
+            "MPE": modified_partition_entropy(u),
             "XBI": xie_beni(Xb, u, centers, distance_metric=distance_metric),
             "FKI": fukuyama_sugeno(Xb, u, centers, distance_metric=distance_metric),
-            "FS": fuzzy_silhouette(Xb, u, centers),
+            "FS": fuzzy_silhouette(Xb, u),
             "Hom": h, "Comp": c, "V-measure": v,
             "ARS": adjusted_rand_score(yb, labels),
             "AMI": adjusted_mutual_info_score(yb, labels),
@@ -133,6 +139,7 @@ def bootstrap_metrics(model, X, y, n_boot, random_state=0, verbose=False, show_n
 
     if verbose and n_failed:
         print(f"  [{n_failed}/{n_boot} resamples produced NaN memberships]")
+        print_params = True
 
     df = pd.DataFrame(rows)
     info_metrics = {m: (df[m].mean(), df[m].std()) for m in METRICS}   
@@ -141,7 +148,7 @@ def bootstrap_metrics(model, X, y, n_boot, random_state=0, verbose=False, show_n
                       "n_final": (df["n_final"].mean(), df["n_final"].std())}
         return {**dict_final, **info_metrics}
     
-    return info_metrics   
+    return (info_metrics, print_params)
 
 # BORRAR
 def create_df_FCM(model, data, n_boot=30):
@@ -223,7 +230,7 @@ def create_df_eQFCM(model, data, size):
     return pd.DataFrame(results)
 
 # BUENA
-def create_df_params(model, data, C, dist_metric, size, n_boot):
+def create_df_params(model, data, C, dist_metric, size, n_boot, apply_bootstrap):
     """
     This function is for once it gets a model it gets what params it needs to play with from grid 
     and applies the bootstrap to each one of them
@@ -246,12 +253,14 @@ def create_df_params(model, data, C, dist_metric, size, n_boot):
 
     results = []
 
-    if base_model == "FCM" or base_model == "eFCM": # only has m and we don't vary it (stays 2)
+    if model == "FCM" or model == "eFCM": # only has m and we don't vary it (stays 2)
         for param_m in [2]:
             model_copy = copy.deepcopy(base_model)
             # Set params that will vary
             model_copy.m = param_m
-            metrics = bootstrap_metrics(model_copy, data[0], data[1], n_boot, random_state=0)
+            metrics, print_params = bootstrap_metrics(model_copy, data[0], data[1], n_boot, apply_bootstrap, random_state=0)
+            if print_params:
+                print(f"error in combination: m={param_m}")
 
             row = {"param_m": param_m}
             for metric, (mean_val, std_val) in metrics.items():
@@ -259,14 +268,16 @@ def create_df_params(model, data, C, dist_metric, size, n_boot):
                 row[f"{metric}_std"] = std_val
             results.append(row)
     
-    elif base_model == "QFCM" or base_model == "YFCM": # we vary m and lambda
+    elif model == "QFCM" or model == "YFCM": # we vary m and lambda
         for param_lam in GRIDS[size]["lam"]:
             for param_m in GRIDS[size]["m"]:
                 model_copy = copy.deepcopy(base_model)
                 # Set params that will vary
                 model_copy.m = param_m
                 model_copy.lambda_ = param_lam
-                metrics = bootstrap_metrics(model_copy, data[0], data[1], n_boot, random_state=0)
+                metrics, print_params = bootstrap_metrics(model_copy, data[0], data[1], n_boot, apply_bootstrap, random_state=0)
+                if print_params:
+                    print(f"error in combination: m={param_m}, lam={param_lam}")
 
                 row = {"param_m": param_m, "param_lam": param_lam}
                 for metric, (mean_val, std_val) in metrics.items():
@@ -274,7 +285,7 @@ def create_df_params(model, data, C, dist_metric, size, n_boot):
                     row[f"{metric}_std"] = std_val
                 results.append(row)
     
-    elif base_model == "eQFCM":
+    elif model == "eQFCM":
         for param_m1 in GRIDS[size]["m1"]:
             for param_m2 in GRIDS[size]["m2"]:
                 for param_lam1 in GRIDS[size]["lam1"]:
@@ -285,7 +296,9 @@ def create_df_params(model, data, C, dist_metric, size, n_boot):
                         model_copy.m2 = param_m2
                         model_copy.lambda1 = param_lam1
                         model_copy.lambda2 = param_lam2
-                        metrics = bootstrap_metrics(model_copy, data[0], data[1], n_boot, random_state=0)
+                        metrics, print_params = bootstrap_metrics(model_copy, data[0], data[1], n_boot, apply_bootstrap, random_state=0)
+                        if print_params:
+                            print(f"error in combination: m1={param_m1}, m2={param_m2}, lam1={param_lam1}, lam2={param_lam2}")
 
                         row = {"param_m1": param_m1, "param_m2": param_m2, "param_lam1": param_lam1, "param_lam2": param_lam2}
                         for metric, (mean_val, std_val) in metrics.items():
@@ -302,6 +315,7 @@ def filter_extremes(df_initial):
     """
     metrics_to_filter = {
         'PC_mean': 'max',
+        'MPC_mean': 'max',
         'PE_mean': 'min',
         'XBI_mean': 'min',
         'FKI_mean': 'min',
@@ -429,6 +443,14 @@ def partition_entropy(u):
     entropy_sum = np.sum(u * np.log2(u))
     return float(-(1.0 / N) * entropy_sum)
 
+def modified_partition_entropy(u):
+    """1 - PE/log(C).  Range [0, 1]; higher = crisper."""
+    PE = partition_entropy(u)
+    C = u.shape[1]
+    if C <= 1:
+        return 0.0                        
+    return float(1.0 - PE / np.log2(C))
+
 def xie_beni(X, u, centers, distance_metric="sqeuclidean"):
     """XBI = [sum_ij mu^m ||x_i - v_j||^2]   /   [N * min_{i!=j} ||v_i - v_j||^2].
     Lower = better (compactness / separation)"""
@@ -452,13 +474,14 @@ def fukuyama_sugeno(X, u, centers, distance_metric="sqeuclidean"):
     separation = np.sum(um * sep_j[None, :])
     return float(compact - separation)
 
-def fuzzy_silhouette(X, u, centers):
+def fuzzy_silhouette(X, u):
     """
     NOT IDEAL FOR GK CLUSTERING, since it uses Euclidean distance by default.
     FS = sum_i (u_ij - u_ij')^alpha * s_i  /  sum_i (u_ij - u_ij')^alpha
 
     where s_i is the crisp silhouette of sample i, and u_ij, u_ij' are the
     largest and second-largest membership values of row i of U.
+    If the number of clusters is not minimum 2, it does not get calculated (NA)
 
     Higher = better
     """
@@ -467,13 +490,15 @@ def fuzzy_silhouette(X, u, centers):
     labels = np.argmax(u, axis=1)
 
     # Safe check
-    k = len(np.unique(labels))
+    k = len(np.unique(labels)) # number of different clusters
     if k < 2 or k > len(labels) - 1:
         return np.nan
-    try:
-        s = silhouette_samples(X, labels, metric="euclidean")  
-    except Exception:
-        return np.nan
+    # BORRAR
+    # try:
+    #     s = silhouette_samples(X, labels, metric="euclidean")  
+    # except Exception:
+    #     return np.nan
+    s = silhouette_samples(X, labels, metric="euclidean")  
     
     # Two largest memberships per row
     u_sorted = np.sort(u, axis=1)
@@ -497,10 +522,8 @@ def safe_silhouette(X, labels):
     k = len(np.unique(labels))
     if k < 2 or k > len(labels) - 1:
         return np.nan
-    try:
-        return float(silhouette_score(X, labels))
-    except Exception:
-        return np.nan
+    
+    return float(silhouette_score(X, labels))
     
 
 
@@ -572,19 +595,3 @@ def covariance_matrix(X, u, centers):
     
     return P
 
-
-
-# BORRAR
-# print(f"The ARI is {adjusted_rand_score(X_aniso[1], model_fcm_1.labels())}")
-# print(f"The PC is {partition_coefficient(model_fcm_1.u)}")
-# print(f"The MPC is {modified_partition_coefficient(model_fcm_1.u)}")
-# print(f"The PE is {partition_entropy(model_fcm_1.u)}")
-# print(f"The XBI is {xie_beni(X_aniso[0], model_fcm_1.u, model_fcm_1.centers)}")
-# print(f"The FKI is {fukuyama_sugeno(X_aniso[0], model_fcm_1.u, model_fcm_1.centers)}")
-# print(f"The FS is {fuzzy_silhouette(X_aniso[0], model_fcm_1.u, model_fcm_1.centers)}")
-# print(f"The Hom is {homogeneity_completeness_v_measure(X_aniso[1], model_fcm_1.labels())[0]}")
-# print(f"The Comp is {homogeneity_completeness_v_measure(X_aniso[1], model_fcm_1.labels())[1]}")
-# print(f"The V-measure is {homogeneity_completeness_v_measure(X_aniso[1], model_fcm_1.labels())[2]}")
-# print(f"The ARS is {adjusted_rand_score(X_aniso[1], model_fcm_1.labels())}")
-# print(f"The AMI is {adjusted_mutual_info_score(X_aniso[1], model_fcm_1.labels())}")
-# print(f"The Silh is {safe_silhouette(X_aniso[0], model_fcm_1.labels())}")

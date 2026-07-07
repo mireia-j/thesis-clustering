@@ -17,14 +17,23 @@ class eQFCM(BaseKanzawa):
 
     def __init__(self, n_clusters=10, m1=2, m2=2, lambda1=1.0, lambda2=1.0,
                  max_iter=150, error=1e-5, random_state=42, merge=False, epsilon_1=0.01, threshold_merge="original", distance_metric='euclidean'):
-        # base `m` (used by next_centers) is the membership exponent m1
         super().__init__(n_clusters=n_clusters, m=m1, lambda_=lambda1,
                          max_iter=max_iter, error=error,
                          random_state=random_state, merge=merge, epsilon_1=epsilon_1, threshold_merge=threshold_merge, distance_metric=distance_metric)
-        self.m1 = m1
+        self.m1 = m1              
         self.m2 = m2
         self.lambda1 = lambda1
         self.lambda2 = lambda2
+
+    # This two property and setter are for m1 to overwrite m in next_centers and in the calculation of the covariance matrix
+    @property
+    def m1(self):
+        """Membership fuzzifier; alias of the base `m` used by next_centers()."""
+        return self.m
+
+    @m1.setter
+    def m1(self, value):
+        self.m = value
 
     def factor1(self, D):
         # 1 - lambda1(1-m2) d_ik  (>= 1 > 0)
