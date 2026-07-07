@@ -61,7 +61,7 @@ GRIDS = {
                    lam=[0.01, 0.1, 1.0, 10.0], lam1=[0.1, 1.0, 10.0], lam2=[0.1, 1.0, 10.0],
                    alpha=["original", "new", 0.25, 0.5, 0.75]),
 
-    "large": dict(m=[1.1, 1.3, 1.5, 1.7, 2.0],  m1=[1.1, 1.3, 1.5, 1.8, 2.0],  m2=[1.05, 1.1, 1.3, 1.5, 1.8, 2.0],
+    "large": dict(m=[1.1, 1.3, 1.5, 1.8, 2.0],  m1=[1.1, 1.3, 1.5, 1.8, 2.0],  m2=[1.05, 1.1, 1.3, 1.5, 1.8, 2.0],
                      lam=[0.001, 0.01, 1.0, 10.0, 100.0],  lam1=[0.001, 0.01, 1.0, 10.0, 100.0],  lam2=[0.001, 0.01, 1.0, 10.0, 100.0],
                      alpha=["original", "new", 0.2, 0.4, 0.6, 0.8, 0.9]),
 
@@ -79,6 +79,8 @@ GRIDS = {
                    lam1=[10.0 ** e for e in range(-15, 16, 2)],
                    lam2=[10.0 ** e for e in range(-15, 16, 2)]),
 }
+
+METRICS = ["PC", "MPC", "PE", "MPE", "XBI", "FKI", "FS", "Hom", "Comp", "V-measure", "ARS", "AMI", "Silh"]
 
 def bootstrap_metrics(model, X, y, n_boot, apply_bootstrap, random_state=0, verbose=True):
     """
@@ -309,7 +311,7 @@ PARAM_SETTERS = {
     "param_lam2": lambda mdl, v: setattr(mdl, "lambda2", v),
 }
 
-def create_df_threshold_alpha(model, data, n_clusters_merge, dist_metric, size, n_boot, df=None):
+def create_df_threshold_alpha(model, data, n_clusters_merge, dist_metric, size, n_boot, apply_bootstrap, df):
     """
     model: "FCM", "eFCM", "QFCM", "YFCM" or "eQFCM"
     df: the results of a dataframe with the variation of model params and its metric results from the bootstrap process
@@ -317,7 +319,7 @@ def create_df_threshold_alpha(model, data, n_clusters_merge, dist_metric, size, 
     (via filter_extremes), then re-runs that model with merge=True while
     sweeping the alpha values in GRIDS[size]["alpha"].
     """
-    if df is not None or model == "FCM" or model == "eFCM":
+    if model == "FCM" or model == "eFCM":
         df_filtered = df
     else:
         df_filtered = filter_extremes(df, dist_metric)
@@ -352,7 +354,7 @@ def create_df_threshold_alpha(model, data, n_clusters_merge, dist_metric, size, 
                     PARAM_SETTERS[param_name](m_i, actual_param)
             m_i.threshold_merge = alpha                     
 
-            metrics = bootstrap_metrics(m_i, data[0], data[1], n_boot, random_state=0, show_n_final=True)
+            metrics = bootstrap_metrics(m_i, data[0], data[1], n_boot, apply_bootstrap, random_state=0)
 
             row = dict(best_value)                 
             row["alpha"] = alpha
