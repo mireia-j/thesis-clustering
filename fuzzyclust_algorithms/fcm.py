@@ -28,7 +28,7 @@ class FCM(BaseFuzzyClustering):
         return self
     
     def update_membership(self, D):
-        power = float(1 / (self.m - 1))
+        power = float(2 / (self.m - 1))
         dist = D ** power
         denominator_ = dist.reshape((D.shape[0], 1, -1)).repeat(dist.shape[-1], axis=1)
         denominator_ = dist[:, :, np.newaxis] / denominator_

@@ -235,7 +235,7 @@ def filter_extremes(df_initial, dist_metric):
     1. Primary condition. Keep every row satisfying
          (MPC_mean >= 0.8 OR MPE_mean > 0.8)
          AND (V-measure_mean >= 0.8 OR ARS_mean >= 0.8 OR AMI_mean >= 0.8)
-    2. Fallback. If the primary condition yields fewer than 4 rows, ignore it
+    2. Fallback. If the primary condition yields fewer than 4 rows or more than 15, ignore it
        and instead take the top-3 rows (highest mean) of each of MPC, MPE,
        V-measure, ARS and AMI. Duplicates allowed here; dropped at the end.
     3. Always add the top-3 rows (lowest mean) of XBI and FKI.
@@ -270,8 +270,8 @@ def filter_extremes(df_initial, dist_metric):
 
     df_cond = df[cond_crispness & cond_agreement]
 
-    # Step 2: fallback if fewer than 4 rows
-    if len(df_cond) >= 4:
+    # Step 2: fallback if fewer than 4 rows or too many rows in the dataframe (more than 10)
+    if len(df_cond) >= 4 and len(df_cond) <=15:
         base = df_cond
     else:
         base = pd.concat(

@@ -32,6 +32,9 @@ class QFCM(BaseKanzawa):
 
 
 if __name__ == "__main__":
+    m_list = [1.1, 1.3, 1.5, 1.7, 2.0]
+    lam_list = [0.01, 1.0, 10.0, 100.0]
+
     rng = np.random.RandomState(0)
     X = np.vstack([rng.randn(100, 2) - 4,
                    rng.randn(100, 2),
