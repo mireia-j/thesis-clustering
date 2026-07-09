@@ -17,7 +17,7 @@ except ImportError:
     from fuzzyclust_algorithms.yfcm import YFCM
     from fuzzyclust_algorithms.eqfcm import eQFCM
 
-from utils import plot_results, create_df_params, create_df_threshold_alpha, bootstrap_metrics, filter_extremes
+from utils import plot_results, create_df_params, create_df_threshold_alpha, bootstrap_metrics, filter_extremes, load_openml_numpy
 
 if __name__ == "__main__":
     start_time = time.perf_counter()
@@ -26,16 +26,15 @@ if __name__ == "__main__":
         # "wine": {"dataset_x_y": load_wine(return_X_y=True), "C_official": 3, "C_upper": 10},
         # "breast": {"dataset_x_y": load_breast_cancer(return_X_y=True), "C_official": 2, "C_upper": 10},
         # "iris": {"dataset_x_y": load_iris(return_X_y=True), "C_official": 3, "C_upper": 10},
-        "heart": {"dataset_x_y": fetch_openml(name="heart", version=1, return_X_y=True), "C_official": 2, "C_upper": 10},
-        "bupa": {"dataset_x_y": fetch_openml(name="liver-disorders", version=1, return_X_y=True), "C_official": 2, "C_upper": 10},
-        "glass": {"dataset_x_y": fetch_openml(name="glass", version=1, return_X_y=True), "C_official": 6, "C_upper": 15},
-        "sonar": {"dataset_x_y": fetch_openml(name="sonar", version=1, return_X_y=True), "C_official": 2, "C_upper": 10},
+        "heart": {"dataset_x_y": load_openml_numpy("heart"), "C_official": 2, "C_upper": 10},
+        "bupa": {"dataset_x_y": load_openml_numpy("liver-disorders"), "C_official": 2, "C_upper": 10},
+        "glass": {"dataset_x_y": load_openml_numpy("glass"), "C_official": 6, "C_upper": 15},
+        "sonar": {"dataset_x_y": load_openml_numpy("sonar"), "C_official": 2, "C_upper": 10}
     }
 
     # BORRAR
     for data_name in REAL_DATASETS:
         data_used = REAL_DATASETS[data_name]["dataset_x_y"]
-        # data_scaled = (StandardScaler().fit_transform(np.asarray(data_used[0], dtype=float)), data_used[1])
         n_real_clusters = REAL_DATASETS[data_name]["C_official"]
         n_upper_clusters = REAL_DATASETS[data_name]["C_upper"]
         print(f"data name: {data_name}, data used: {type(data_used)}, n real clusters: {n_real_clusters}, n upper clusters: {n_upper_clusters}")
@@ -54,7 +53,6 @@ if __name__ == "__main__":
         # _________________________________________________________________________________________________________________
 
         data_used = REAL_DATASETS[data_name]["dataset_x_y"]
-        # data_name = "iris"
         data_scaled = (StandardScaler().fit_transform(np.asarray(data_used[0], dtype=float)), data_used[1])
         n_real_clusters = REAL_DATASETS[data_name]["C_official"]
         n_upper_clusters = REAL_DATASETS[data_name]["C_upper"]

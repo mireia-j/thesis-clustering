@@ -3,6 +3,7 @@
 import numpy as np, matplotlib.pyplot as plt, pandas as pd
 from sklearn.metrics import (adjusted_rand_score, adjusted_mutual_info_score, silhouette_score, silhouette_samples, homogeneity_completeness_v_measure)
 from scipy.spatial.distance import cdist
+from sklearn.datasets import fetch_openml
 import copy
 
 try:
@@ -366,6 +367,30 @@ def create_df_threshold_alpha(model, data, n_clusters_merge, dist_metric, size, 
             results.append(row)
 
     return pd.DataFrame(results)
+
+def load_openml_numpy(name, version=1):
+    """
+    Function for having all the loaded datasets (e.g. sonar, heart, etc.) in the same format
+    which is (X, y) in the type of (numpy.ndarray, numpy.ndarray)
+    """
+    X, y = fetch_openml(
+        name=name,
+        version=version,
+        return_X_y=True,
+        as_frame=False
+    )
+
+    # sparse -> dense
+    if hasattr(X, "toarray"):
+        X = X.toarray()
+
+    X = np.asarray(X)
+    y = np.asarray(y)
+
+    return X, y
+
+
+
 
 
 # _________________________________________________________________
