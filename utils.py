@@ -63,8 +63,8 @@ GRIDS = {
                    alpha=["original", "new", 0.25, 0.5, 0.75]),
 
     "large": dict(m=[1.1, 1.3, 1.5, 1.8, 2.0],  m1=[1.1, 1.3, 1.5, 1.8, 2.0],  m2=[1.05, 1.1, 1.3, 1.5, 1.8, 2.0],
-                     lam=[0.001, 0.01, 1.0, 10.0, 100.0],  lam1=[0.001, 0.01, 1.0, 10.0, 100.0],  lam2=[0.001, 0.01, 1.0, 10.0, 100.0],
-                     alpha=["original", "new", 0.2, 0.4, 0.6, 0.8, 0.9]),
+                     lam=[0.001, 0.01, 0.1, 1.0, 10.0, 100.0],  lam1=[0.001, 0.01, 0.1, 1.0, 10.0, 100.0],  lam2=[0.001, 0.01, 0.1, 1.0, 10.0, 100.0],
+                     alpha=["original", "new", 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]),
 
     "extra_large":  dict(m=[1.05, 1.1, 1.3, 1.5, 2.0],  
                          m1=[1.3, 1.5, 1.8, 2.0],  m2=[1.05, 1.1, 1.3, 1.5, 1.8, 2.0],
@@ -83,11 +83,12 @@ GRIDS = {
 
 METRICS = ["PC", "MPC", "PE", "MPE", "XBI", "FKI", "FS", "Hom", "Comp", "V-measure", "ARS", "AMI", "Silh"]
 
-def bootstrap_metrics(model, X, y, n_boot, apply_bootstrap, random_state=0, verbose=True):
+def bootstrap_metrics(model, X, y, n_boot, apply_bootstrap, random_state=0, verbose=True, frac=0.9):
     """
     This function gets the model with its right parameters and returns the right mean and the std of the bootstrap.
     model: instance of model without fitting it yet
     apply_bootstrap: if it is True we apply the bootstrap. If False, we only apply different initialization.
+    frac: fraction of the data (per class) to draw at each bootstrap iteration when apply_bootstrap=True.
     """
     print_params = False
     rng = np.random.RandomState(random_state)
@@ -96,9 +97,22 @@ def bootstrap_metrics(model, X, y, n_boot, apply_bootstrap, random_state=0, verb
     rows = []
     n_failed = 0
     show_n_final = model.merge # is for showing the initial and final values of n_clusters when merging
+
+    # For bootstrap part: keep 90% of data and do stratified sampling
+    classes = np.unique(y)
+    class_indices = {c: np.flatnonzero(y == c) for c in classes}
+
     for i in range(n_boot):
         if apply_bootstrap:
-            idx = rng.randint(0, N, size=N)
+            idx_parts = []
+            for c in classes:
+                c_idx = class_indices[c]
+                n_c = c_idx.shape[0]
+                n_draw = max(1, int(round(frac * n_c)))  # keep ~90% of each class, at least 1
+                sampled = rng.choice(c_idx, size=n_draw, replace=True)
+                idx_parts.append(sampled)
+            idx = np.concatenate(idx_parts)
+            rng.shuffle(idx)  # avoid keeping samples grouped by class
             Xb, yb = X[idx], y[idx]
         else:
             Xb, yb = X, y
@@ -230,6 +244,151 @@ def create_df_params(model, data, C, dist_metric, size, n_boot, apply_bootstrap)
         
     return pd.DataFrame(results)
 
+
+def rank_by_vmeasure(df, n, col='V-measure_mean', new_col='ranking_params', decimals=8):
+    """
+    Rank rows of `df` by the top-n distinct values of `col`, keeping only
+    the parameter columns and the resulting ranking.
+
+    The highest value of `col` gets ranking_params = n, the second-highest
+    *distinct* value gets n-1, and so on down to 1 for the n-th best distinct
+    value. Rows whose value is not among the top-n distinct values (or is NaN)
+    get ranking_params = NaN. Ties share the same rank (dense ranking), so a
+    tie never "costs" more than one of the n available slots.
+
+    As a final override, any row whose raw `col` value is below 0.0001 has
+    its `new_col` forced to 0, regardless of the rank computed above.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+    n : int
+        Number of distinct top values to rank (i.e. the best row(s) get n,
+        down to 1 for the n-th best distinct value).
+    col : str
+        Column to rank by (default 'V-measure_mean').
+    new_col : str
+        Name of the output ranking column (default 'ranking_params').
+    decimals : int
+        Number of decimals `col` is rounded to before ranking, so that
+        values which differ only by floating-point noise are treated as
+        exact ties. Set to None to disable rounding.
+
+    Returns
+    -------
+    pd.DataFrame
+        Only the columns starting with 'param_' plus `new_col`.
+    """
+    result = df.copy()
+
+    if col not in result.columns:
+        result[new_col] = np.nan
+    else:
+        col_values = result[col]
+        if decimals is not None:
+            col_values = col_values.round(decimals)
+
+        # Dense rank, descending: 1 = highest value, ties share the same rank,
+        # and no rank is skipped after a tie (unlike default 'average'/'min').
+        dense_rank = col_values.rank(method='dense', ascending=False)
+
+        # Only the top-n distinct values are kept.
+        within_top_n = dense_rank <= n
+
+        # Flip the scale so the best value gets n, and the n-th best gets 1.
+        result[new_col] = (n - dense_rank + 1).where(within_top_n)
+
+        # Override: values below 0.0001 always get ranking_params = 0,
+        # even if they would otherwise have landed in the top-n.
+        low_value_mask = result[col] < 0.0001
+        result.loc[low_value_mask, new_col] = 0
+
+    param_cols = [c for c in result.columns if c.startswith('param_')]
+    return result[param_cols + [new_col]]
+
+
+def sum_rankings(df_list, ranking_col='ranking_params'):
+    """
+    Combine a list of ranked dataframes (as produced by `rank_by_vmeasure`)
+    into a single dataframe, summing `ranking_col` over rows that share the
+    same combination of parameter values. The result is sorted so that the
+    highest summed ranking appears first.
+
+    Parameters
+    ----------
+    df_list : list of pd.DataFrame
+        Each dataframe must contain the same set of 'param_*' columns plus
+        `ranking_col`. Rows with NaN in `ranking_col` (i.e. not among the
+        top-n for that particular ranking) contribute 0 to the sum.
+    ranking_col : str
+        Name of the column to sum (default 'ranking_params').
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per distinct parameter combination, with `ranking_col`
+        replaced by the summed value across all dataframes in df_list,
+        sorted in descending order of `ranking_col`.
+    """
+    if not df_list:
+        raise ValueError("df_list is empty.")
+
+    param_cols_sets = [
+        frozenset(c for c in df.columns if c.startswith('param_'))
+        for df in df_list
+    ]
+    if len(set(param_cols_sets)) > 1:
+        raise ValueError(
+            "All dataframes in df_list must share the same set of "
+            f"'param_*' columns. Found differing sets: {param_cols_sets}"
+        )
+    param_cols = sorted(param_cols_sets[0])
+
+    combined = pd.concat(
+        [df[param_cols + [ranking_col]] for df in df_list],
+        ignore_index=True
+    )
+    combined[ranking_col] = combined[ranking_col].fillna(0)
+
+    result = (
+        combined
+        .groupby(param_cols, as_index=False, dropna=False)[ranking_col]
+        .sum()
+        .sort_values(ranking_col, ascending=False)
+        .reset_index(drop=True)
+    )
+
+    return result
+
+def filter_best_ranking(df, ranking_col='ranking_params'):
+    """
+    Filter a dataframe (as produced by `sum_rankings`) to keep only the
+    row(s) with the highest value of `ranking_col`. If there is a tie at
+    the top, all tied rows are kept.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Must contain `ranking_col`.
+    ranking_col : str
+        Name of the ranking column to filter by (default 'ranking_params').
+
+    Returns
+    -------
+    pd.DataFrame
+        Subset of `df` containing only the row(s) with the maximum value
+        of `ranking_col`.
+    """
+    if df.empty:
+        return df.copy()
+
+    max_val = df[ranking_col].max()
+    result = df[df[ranking_col] == max_val].reset_index(drop=True)
+
+    return result
+
+
+# BORRAR
 def filter_extremes(df_initial, dist_metric):
     """Shortlist the most promising parameter rows from a metrics dataframe.
 
@@ -319,11 +478,16 @@ def create_df_threshold_alpha(model, data, n_clusters_merge, dist_metric, size, 
     Takes a results df from one model, picks the best-metric parameter rows
     (via filter_extremes), then re-runs that model with merge=True while
     sweeping the alpha values in GRIDS[size]["alpha"].
+    df: already has the parameters that we want to play with. 
     """
-    if model == "FCM" or model == "eFCM":
-        df_filtered = df
-    else:
-        df_filtered = filter_extremes(df, dist_metric)
+    # BORRAR
+    # if model == "FCM" or model == "eFCM":
+    #     df_filtered = df
+    # else:
+    #     # df_filtered = filter_extremes(df, dist_metric) # BORRAR
+    #     df_filtered = filter_best_ranking(df)
+
+    df_filtered = df.copy()
 
     param_cols = [c for c in df_filtered.columns if c.startswith("param_")]
     list_best_value = [
@@ -358,7 +522,7 @@ def create_df_threshold_alpha(model, data, n_clusters_merge, dist_metric, size, 
             metrics = bootstrap_metrics(m_i, data[0], data[1], n_boot, apply_bootstrap, random_state=0)
 
             row = dict(best_value)                 
-            row["alpha"] = alpha
+            row["param_alpha"] = alpha
             for name, val in metrics.items():
                 if isinstance(val, tuple):         
                     row[f"{name}_mean"], row[f"{name}_std"] = val

@@ -2,9 +2,6 @@ import numpy as np, matplotlib.pyplot as plt, pandas as pd
 from sklearn import datasets
 from sklearn.preprocessing import StandardScaler
 
-# BORRAR
-from sklearn.metrics import (adjusted_rand_score, adjusted_mutual_info_score, silhouette_score, silhouette_samples, homogeneity_completeness_v_measure)
-
 try:
     from fcm import FCM
     from efcm import eFCM
