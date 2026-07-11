@@ -50,11 +50,12 @@ if __name__ == "__main__":
     folder_name_mah = "Real_results_Mahalanobis"
     distance_mah = "mahalanobis"
 
+    folder_name_best = "Real_results_BEST_COMBO"
+
     for algorithm_used in ALGORITHMS:
-        # algorithm_used = "QFCM"
         file_name_algorithm = algorithm_used.lower()
 
-        # --- Trying m and lambda ---
+        # ---------------------- Trying m and lambda ----------------------
         df_params_m_lam_EUC = []
         df_params_m_lam_MAH = []
 
@@ -76,13 +77,18 @@ if __name__ == "__main__":
             ranking_fcm_false_MAH = rank_by_vmeasure(df_fcm_false_MAH, 10)
             df_params_m_lam_MAH.append(ranking_fcm_false_MAH)
 
+        # BORRAR
         df_best_m_lam_EUC = filter_best_ranking(sum_rankings(df_params_m_lam_EUC))
         df_best_m_lam_MAH = filter_best_ranking(sum_rankings(df_params_m_lam_MAH))
 
 
-        # --- Trying threshold alpha ---
-        df_params_alpha_EUC = []
-        df_params_alpha_MAH = []
+        # ---------------------- Trying threshold alpha ----------------------
+
+        # 1. CREATE A LIST WITH ALL THE DATASETS FOR ALPHA
+        df_params_alpha_EUC_ranking = []
+        df_params_alpha_EUC_metrics = []
+        df_params_alpha_MAH_ranking = []
+        df_params_alpha_MAH_metrics = []
 
         for data_name in REAL_DATASETS:
 
@@ -93,20 +99,63 @@ if __name__ == "__main__":
             #  ----- Euclidean -------
             df_fcm_true_EUC = create_df_threshold_alpha(algorithm_used, data_scaled, n_upper_clusters, distance_euc, "large", n_boot, apply_bootstrap, df_best_m_lam_EUC)
             df_fcm_true_EUC.to_csv(f"{folder_name_euc}/{file_name_algorithm}_{data_name}_mTrue.csv")
+            new_cols_EUC = pd.DataFrame({
+                "Dist": distance_euc,
+                "algorithm": algorithm_used,
+                "dataset": data_name
+            }, index=df_fcm_true_EUC.index)
+            df_fcm_true_EUC_extra_columns = pd.concat([new_cols_EUC, df_fcm_true_EUC], axis=1)
+            df_params_alpha_EUC_metrics.append(df_fcm_true_EUC_extra_columns)
             ranking_fcm_true_EUC = rank_by_vmeasure(df_fcm_true_EUC, 3)
-            df_params_alpha_EUC.append(ranking_fcm_true_EUC)
+            df_params_alpha_EUC_ranking.append(ranking_fcm_true_EUC)
 
             #  ----- Mahalanobis -------
             df_fcm_true_MAH = create_df_threshold_alpha(algorithm_used, data_used, n_upper_clusters, distance_mah, "large", n_boot, apply_bootstrap, df_best_m_lam_MAH)
             df_fcm_true_MAH.to_csv(f"{folder_name_mah}/{file_name_algorithm}_{data_name}_mTrue.csv")
+            new_cols_MAH = pd.DataFrame({
+                "Dist": distance_mah,
+                "algorithm": algorithm_used,
+                "dataset": data_name
+            }, index=df_fcm_true_MAH.index)
+            df_fcm_true_MAH_extra_columns = pd.concat([new_cols_MAH, df_fcm_true_MAH], axis=1)
+            df_params_alpha_MAH_metrics.append(df_fcm_true_MAH_extra_columns)
             ranking_fcm_true_MAH = rank_by_vmeasure(df_fcm_true_MAH, 3)
-            df_params_alpha_MAH.append(ranking_fcm_true_MAH)
+            df_params_alpha_MAH_ranking.append(ranking_fcm_true_MAH)
 
-        df_best_alpha_EUC = filter_best_ranking(sum_rankings(df_params_alpha_EUC))
-        print(f"\nBest alpha - {algorithm_used} // Euclidean: ")
-        print(df_best_alpha_EUC)
+        # 2. GET THE OPTIMAL COMBINATION OF alpha, m, lambda
+        df_best_alpha_EUC = filter_best_ranking(sum_rankings(df_params_alpha_EUC_ranking))
+        df_best_alpha_MAH = filter_best_ranking(sum_rankings(df_params_alpha_MAH_ranking))
 
-        df_best_alpha_MAH = filter_best_ranking(sum_rankings(df_params_alpha_MAH))
-        print(f"\nBest alpha - {algorithm_used} // Mahalanobis ***")
-        print(df_best_alpha_MAH)
+        # 3. FILTER IN THAT HAS ALL THE ALPHA COMBINATIONS AND METRICS BY THIS BEST COMBINATION
 
+        #  ----- Euclidean -------
+        param_cols_EUC = [c for c in df_best_alpha_EUC.columns if c.startswith("param_")]
+        valid_combinations = set(
+            map(tuple, df_best_alpha_EUC[param_cols_EUC].to_numpy())
+        )
+        filtered_dfs_EUC = []
+        for df in df_params_alpha_EUC_metrics:
+            mask = df[param_cols_EUC].apply(tuple, axis=1).isin(valid_combinations)
+            filtered_dfs_EUC.append(df[mask])
+        final_combination_EUC = pd.concat(filtered_dfs_EUC, ignore_index=True)
+        final_combination_EUC.to_csv(f"{folder_name_best}/euc_{file_name_algorithm}.csv")
+
+        #  ----- Mahalanobis -------
+        param_cols_MAH = [c for c in df_best_alpha_MAH.columns if c.startswith("param_")]
+        valid_combinations = set(
+            map(tuple, df_best_alpha_MAH[param_cols_MAH].to_numpy())
+        )
+        filtered_dfs_MAH = []
+        for df in df_params_alpha_MAH_metrics:
+            mask = df[param_cols_MAH].apply(tuple, axis=1).isin(valid_combinations)
+            filtered_dfs_MAH.append(df[mask])
+        final_combination_MAH = pd.concat(filtered_dfs_MAH, ignore_index=True)
+        final_combination_MAH.to_csv(f"{folder_name_best}/mah_{file_name_algorithm}.csv")
+
+        # print("\nEuclidean:")
+        # print(final_combination_EUC.iloc[:, [2, 3, 4, 8, 9, 30, 31]])
+        # print("\nMahala:")
+        # print(final_combination_MAH.iloc[:, [2, 3, 4, 8, 9, 30, 31]])
+
+
+    

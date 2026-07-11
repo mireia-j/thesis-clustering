@@ -1,8 +1,0 @@
-,param_m,alpha,n_initial_mean,n_initial_std,n_final_mean,n_final_std,PC_mean,PC_std,MPC_mean,MPC_std,PE_mean,PE_std,MPE_mean,MPE_std,XBI_mean,XBI_std,FKI_mean,FKI_std,FS_mean,FS_std,Hom_mean,Hom_std,Comp_mean,Comp_std,V-measure_mean,V-measure_std,ARS_mean,ARS_std,AMI_mean,AMI_std,Silh_mean,Silh_std
-0,2.0,original,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-1,2.0,new,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-2,2.0,0.2,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-3,2.0,0.4,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-4,2.0,0.6,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-5,2.0,0.8,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-6,2.0,0.9,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
