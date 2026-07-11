@@ -23,12 +23,13 @@ if __name__ == "__main__":
     start_time = time.perf_counter()
 
     REAL_DATASETS = {
-        "wine": {"dataset_x_y": load_wine(return_X_y=True), "C_official": 3, "C_upper": 10},
         "breast": {"dataset_x_y": load_breast_cancer(return_X_y=True), "C_official": 2, "C_upper": 10},
         "iris": {"dataset_x_y": load_iris(return_X_y=True), "C_official": 3, "C_upper": 10},
-        "heart": {"dataset_x_y": load_openml_numpy("heart"), "C_official": 2, "C_upper": 10},
+        "wine": {"dataset_x_y": load_wine(return_X_y=True), "C_official": 3, "C_upper": 10},
         "bupa": {"dataset_x_y": load_openml_numpy("liver-disorders"), "C_official": 2, "C_upper": 10},
         "glass": {"dataset_x_y": load_openml_numpy("glass"), "C_official": 6, "C_upper": 15},
+        "heart": {"dataset_x_y": load_openml_numpy("heart"), "C_official": 2, "C_upper": 10},
+        "seeds": {"dataset_x_y": load_openml_numpy("seeds"), "C_official": 3, "C_upper": 10},
         "sonar": {"dataset_x_y": load_openml_numpy("sonar"), "C_official": 2, "C_upper": 10}
     }
 

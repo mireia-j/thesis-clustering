@@ -83,6 +83,36 @@ GRIDS = {
 
 METRICS = ["PC", "MPC", "PE", "MPE", "XBI", "FKI", "FS", "Hom", "Comp", "V-measure", "ARS", "AMI", "Silh"]
 
+def load_openml_numpy(name, version=1):
+    """
+    Function for having all the loaded datasets (e.g. sonar, heart, etc.) in the same format
+    which is (X, y) in the type of (numpy.ndarray, numpy.ndarray).
+
+    Special case: for "liver-disorders" (bupa) the OpenML default target is the
+    `drinks` count (a numeric field with ~16 distinct values), NOT a class label.
+    Following McDermott & Forsyth, we binarize it at drinks >= 3 to get a 2-class
+    target and discard the `selector` field.
+    """
+    X, y = fetch_openml(
+        name=name,
+        version=version,
+        return_X_y=True,
+        as_frame=False
+    )
+
+    # sparse -> dense
+    if hasattr(X, "toarray"):
+        X = X.toarray()
+
+    X = np.asarray(X)
+    y = np.asarray(y)
+
+    # bupa: turn the raw `drinks` count into a 2-class target
+    if name == "liver-disorders":
+        y = (y.astype(float) >= 3).astype(int)
+
+    return X, y
+
 # BORRAR
 def bootstrap_metrics_2(model, X, y, n_boot, apply_bootstrap, random_state=0, verbose=True, frac=0.9):
     """
@@ -619,35 +649,7 @@ def create_df_threshold_alpha(model, data, n_clusters_merge, dist_metric, size, 
 
     return pd.DataFrame(results)
 
-def load_openml_numpy(name, version=1):
-    """
-    Function for having all the loaded datasets (e.g. sonar, heart, etc.) in the same format
-    which is (X, y) in the type of (numpy.ndarray, numpy.ndarray).
 
-    Special case: for "liver-disorders" (bupa) the OpenML default target is the
-    `drinks` count (a numeric field with ~16 distinct values), NOT a class label.
-    Following McDermott & Forsyth, we binarize it at drinks >= 3 to get a 2-class
-    target and discard the `selector` field.
-    """
-    X, y = fetch_openml(
-        name=name,
-        version=version,
-        return_X_y=True,
-        as_frame=False
-    )
-
-    # sparse -> dense
-    if hasattr(X, "toarray"):
-        X = X.toarray()
-
-    X = np.asarray(X)
-    y = np.asarray(y)
-
-    # bupa: turn the raw `drinks` count into a 2-class target
-    if name == "liver-disorders":
-        y = (y.astype(float) >= 3).astype(int)
-
-    return X, y
 
 
 
