@@ -17,36 +17,37 @@ except ImportError:
     from fuzzyclust_algorithms.yfcm import YFCM
     from fuzzyclust_algorithms.eqfcm import eQFCM
 
-from utils import plot_results, create_df_params, create_df_threshold_alpha, bootstrap_metrics, filter_extremes, load_openml_numpy, sum_rankings, rank_by_vmeasure, filter_best_ranking
+from utils import create_df_params, create_df_threshold_alpha, load_openml_numpy, sum_rankings, rank_by_vmeasure, filter_best_ranking
 
 if __name__ == "__main__":
     start_time = time.perf_counter()
 
     REAL_DATASETS = {
         "wine": {"dataset_x_y": load_wine(return_X_y=True), "C_official": 3, "C_upper": 10},
-        # "breast": {"dataset_x_y": load_breast_cancer(return_X_y=True), "C_official": 2, "C_upper": 10},
+        "breast": {"dataset_x_y": load_breast_cancer(return_X_y=True), "C_official": 2, "C_upper": 10},
         "iris": {"dataset_x_y": load_iris(return_X_y=True), "C_official": 3, "C_upper": 10},
-        # "heart": {"dataset_x_y": load_openml_numpy("heart"), "C_official": 2, "C_upper": 10},
-        # "bupa": {"dataset_x_y": load_openml_numpy("liver-disorders"), "C_official": 2, "C_upper": 10},
-        # "glass": {"dataset_x_y": load_openml_numpy("glass"), "C_official": 6, "C_upper": 15},
-        # "sonar": {"dataset_x_y": load_openml_numpy("sonar"), "C_official": 2, "C_upper": 10}
+        "heart": {"dataset_x_y": load_openml_numpy("heart"), "C_official": 2, "C_upper": 10},
+        "bupa": {"dataset_x_y": load_openml_numpy("liver-disorders"), "C_official": 2, "C_upper": 10},
+        "glass": {"dataset_x_y": load_openml_numpy("glass"), "C_official": 6, "C_upper": 15},
+        "sonar": {"dataset_x_y": load_openml_numpy("sonar"), "C_official": 2, "C_upper": 10}
     }
 
     ALGORITHMS = [
-        # "FCM",
-        # "eFCM",
+        "FCM",
+        "eFCM",
         "QFCM",
-        # "YFCM",
-        # "eQFCM"
+        "YFCM",
+        "eQFCM"
                   ]
+    
+    n_boot = 30
+    apply_bootstrap = True
 
     folder_name_euc = "Real_results_Euclidean"
     distance_euc = "euclidean"
 
     folder_name_mah = "Real_results_Mahalanobis"
     distance_mah = "mahalanobis"
-
-
 
     for algorithm_used in ALGORITHMS:
         # algorithm_used = "QFCM"
@@ -63,13 +64,13 @@ if __name__ == "__main__":
             n_real_clusters = REAL_DATASETS[data_name]["C_official"]
 
             #  ----- Euclidean -------
-            df_fcm_false_EUC = create_df_params(algorithm_used, data_scaled, n_real_clusters, distance_euc, "large", 30, True)
+            df_fcm_false_EUC = create_df_params(algorithm_used, data_scaled, n_real_clusters, distance_euc, "large", n_boot, apply_bootstrap)
             df_fcm_false_EUC.to_csv(f"{folder_name_euc}/{file_name_algorithm}_{data_name}_mFalse.csv")
             ranking_fcm_false_EUC = rank_by_vmeasure(df_fcm_false_EUC, 10)
             df_params_m_lam_EUC.append(ranking_fcm_false_EUC)
 
             #  ----- Mahalanobis -------
-            df_fcm_false_MAH = create_df_params(algorithm_used, data_used, n_real_clusters, distance_mah, "large", 30, True)
+            df_fcm_false_MAH = create_df_params(algorithm_used, data_used, n_real_clusters, distance_mah, "large", n_boot, apply_bootstrap)
             df_fcm_false_MAH.to_csv(f"{folder_name_mah}/{file_name_algorithm}_{data_name}_mFalse.csv")
             ranking_fcm_false_MAH = rank_by_vmeasure(df_fcm_false_MAH, 10)
             df_params_m_lam_MAH.append(ranking_fcm_false_MAH)
@@ -89,13 +90,13 @@ if __name__ == "__main__":
             n_upper_clusters = REAL_DATASETS[data_name]["C_upper"]
 
             #  ----- Euclidean -------
-            df_fcm_true_EUC = create_df_threshold_alpha(algorithm_used, data_scaled, n_upper_clusters, distance_euc, "large", 30, True, df_best_m_lam_EUC)
+            df_fcm_true_EUC = create_df_threshold_alpha(algorithm_used, data_scaled, n_upper_clusters, distance_euc, "large", n_boot, apply_bootstrap, df_best_m_lam_EUC)
             df_fcm_true_EUC.to_csv(f"{folder_name_euc}/{file_name_algorithm}_{data_name}_mTrue.csv")
             ranking_fcm_true_EUC = rank_by_vmeasure(df_fcm_true_EUC, 3)
             df_params_alpha_EUC.append(ranking_fcm_true_EUC)
 
             #  ----- Mahalanobis -------
-            df_fcm_true_MAH = create_df_threshold_alpha(algorithm_used, data_used, n_upper_clusters, distance_mah, "large", 30, True, df_best_m_lam_MAH)
+            df_fcm_true_MAH = create_df_threshold_alpha(algorithm_used, data_used, n_upper_clusters, distance_mah, "large", n_boot, apply_bootstrap, df_best_m_lam_MAH)
             df_fcm_true_MAH.to_csv(f"{folder_name_mah}/{file_name_algorithm}_{data_name}_mTrue.csv")
             ranking_fcm_true_MAH = rank_by_vmeasure(df_fcm_true_MAH, 3)
             df_params_alpha_MAH.append(ranking_fcm_true_MAH)

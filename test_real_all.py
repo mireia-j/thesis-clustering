@@ -34,7 +34,13 @@ if __name__ == "__main__":
 
     # BORRAR
     for data_name in REAL_DATASETS:
+        print("data ", data_name)
         data_used = REAL_DATASETS[data_name]["dataset_x_y"]
+        size_data0 = REAL_DATASETS[data_name]["dataset_x_y"][0]
+        size_data1 = REAL_DATASETS[data_name]["dataset_x_y"][1]
+        vals, counts = np.unique(REAL_DATASETS[data_name]["dataset_x_y"][1], return_counts=True)
+        print(f" dtype=  n_unique={len(vals)}")
+        print("       ", dict(zip(vals.tolist(), counts.tolist())))
         n_real_clusters = REAL_DATASETS[data_name]["C_official"]
         n_upper_clusters = REAL_DATASETS[data_name]["C_upper"]
         print(f"data name: {data_name}, data used: {type(data_used)}, n real clusters: {n_real_clusters}, n upper clusters: {n_upper_clusters}")

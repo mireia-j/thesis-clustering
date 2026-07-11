@@ -83,7 +83,8 @@ GRIDS = {
 
 METRICS = ["PC", "MPC", "PE", "MPE", "XBI", "FKI", "FS", "Hom", "Comp", "V-measure", "ARS", "AMI", "Silh"]
 
-def bootstrap_metrics(model, X, y, n_boot, apply_bootstrap, random_state=0, verbose=True, frac=0.9):
+# BORRAR
+def bootstrap_metrics_2(model, X, y, n_boot, apply_bootstrap, random_state=0, verbose=True, frac=0.9):
     """
     This function gets the model with its right parameters and returns the right mean and the std of the bootstrap.
     model: instance of model without fitting it yet
@@ -163,6 +164,92 @@ def bootstrap_metrics(model, X, y, n_boot, apply_bootstrap, random_state=0, verb
                       "n_final": (df["n_final"].mean(), df["n_final"].std())}
         return {**dict_final, **info_metrics}
     
+    return (info_metrics, print_params)
+
+def bootstrap_metrics(model, X, y, n_boot, apply_bootstrap, random_state=0,
+                      verbose=True, frac=0.9, replace=False):
+    """
+    Returns the mean and std of the metrics across bootstrap/initialisation runs.
+    model: instance of model, not yet fitted
+    apply_bootstrap: if True apply (stratified) resampling; if False only vary init.
+    frac: fraction of each class to draw when apply_bootstrap=True.
+    replace: False -> stratified subsampling (keeps ~frac of DISTINCT points, no duplicates).
+             True  -> stratified m-out-of-n bootstrap (with replacement, duplicates possible).
+    """
+    print_params = False
+    rng = np.random.RandomState(random_state)
+    N = X.shape[0]
+    distance_metric = model.distance_metric
+    rows = []
+    n_failed = 0
+    show_n_final = model.merge  # show initial vs final n_clusters when merging
+
+    classes = np.unique(y)
+    class_indices = {c: np.flatnonzero(y == c) for c in classes}
+
+    for i in range(n_boot):
+        if apply_bootstrap:
+            idx_parts = []
+            for c in classes:
+                c_idx = class_indices[c]
+                n_c = c_idx.shape[0]
+                # keep ~frac of each class; never exceed the class size, never below 1
+                n_draw = max(1, min(n_c, int(round(frac * n_c))))
+                sampled = rng.choice(c_idx, size=n_draw, replace=replace)
+                idx_parts.append(sampled)
+            idx = np.concatenate(idx_parts)
+            rng.shuffle(idx)  # avoid keeping samples grouped by class
+            Xb, yb = X[idx], y[idx]
+        else:
+            Xb, yb = X, y
+
+        m_i = copy.deepcopy(model)
+        m_i.random_state = i**2 + 1  # different U(0) init every iteration
+        m_i.fit(Xb)
+
+        u = m_i.u
+        if u is None or not np.all(np.isfinite(u)):
+            n_failed += 1
+            failed = {k: np.nan for k in METRICS}
+            if show_n_final:
+                failed["n_initial"] = np.nan
+                failed["n_final"] = np.nan
+            rows.append(failed)
+            continue
+
+        labels = m_i.labels()
+        centers = m_i.centers
+        h, c, v = homogeneity_completeness_v_measure(yb, labels)
+        row = {
+            "PC":  partition_coefficient(u),
+            "MPC": modified_partition_coefficient(u),
+            "PE":  partition_entropy(u),
+            "MPE": modified_partition_entropy(u),
+            "XBI": xie_beni(Xb, u, centers, distance_metric=distance_metric),
+            "FKI": fukuyama_sugeno(Xb, u, centers, distance_metric=distance_metric),
+            "FS":  fuzzy_silhouette(Xb, u),
+            "Hom": h, "Comp": c, "V-measure": v,
+            "ARS": adjusted_rand_score(yb, labels),
+            "AMI": adjusted_mutual_info_score(yb, labels),
+            "Silh": safe_silhouette(Xb, labels),
+        }
+        if show_n_final:
+            row["n_initial"] = m_i.n_clusters_init
+            row["n_final"]   = m_i.n_clusters
+        rows.append(row)
+
+    if verbose and n_failed:
+        print(f"  [{n_failed}/{n_boot} resamples produced NaN memberships]")
+        print_params = True
+
+    df = pd.DataFrame(rows)
+    info_metrics = {m: (df[m].mean(), df[m].std()) for m in METRICS}
+    if show_n_final:
+        dict_final = {
+            "n_initial": (df["n_initial"].mean(), df["n_initial"].std()),
+            "n_final":   (df["n_final"].mean(),   df["n_final"].std()),
+        }
+        return {**dict_final, **info_metrics}
     return (info_metrics, print_params)
 
 
@@ -535,7 +622,12 @@ def create_df_threshold_alpha(model, data, n_clusters_merge, dist_metric, size, 
 def load_openml_numpy(name, version=1):
     """
     Function for having all the loaded datasets (e.g. sonar, heart, etc.) in the same format
-    which is (X, y) in the type of (numpy.ndarray, numpy.ndarray)
+    which is (X, y) in the type of (numpy.ndarray, numpy.ndarray).
+
+    Special case: for "liver-disorders" (bupa) the OpenML default target is the
+    `drinks` count (a numeric field with ~16 distinct values), NOT a class label.
+    Following McDermott & Forsyth, we binarize it at drinks >= 3 to get a 2-class
+    target and discard the `selector` field.
     """
     X, y = fetch_openml(
         name=name,
@@ -550,6 +642,10 @@ def load_openml_numpy(name, version=1):
 
     X = np.asarray(X)
     y = np.asarray(y)
+
+    # bupa: turn the raw `drinks` count into a 2-class target
+    if name == "liver-disorders":
+        y = (y.astype(float) >= 3).astype(int)
 
     return X, y
 
