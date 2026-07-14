@@ -77,7 +77,6 @@ if __name__ == "__main__":
             ranking_fcm_false_MAH = rank_by_vmeasure(df_fcm_false_MAH, 10)
             df_params_m_lam_MAH.append(ranking_fcm_false_MAH)
 
-        # BORRAR
         df_best_m_lam_EUC = filter_best_ranking(sum_rankings(df_params_m_lam_EUC))
         df_best_m_lam_MAH = filter_best_ranking(sum_rankings(df_params_m_lam_MAH))
 
