@@ -88,7 +88,7 @@ class eFCM(BaseFuzzyClustering):
 
     def update_membership(self, d2_mod):
         N, C = d2_mod.shape
-        power = 1.0 / (self.m - 1)
+        power = 2.0 / (self.m - 1)
         u = np.zeros((N, C))
 
         inside = d2_mod <= 0.0                  # phi_k: prototypes containing x_k

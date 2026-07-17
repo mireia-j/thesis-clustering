@@ -423,80 +423,6 @@ def filter_best_ranking(df, ranking_col='ranking_params'):
     return result
 
 
-# BORRAR
-def filter_extremes(df_initial, dist_metric):
-    """Shortlist the most promising parameter rows from a metrics dataframe.
-
-    1. Primary condition. Keep every row satisfying
-         (MPC_mean >= 0.8 OR MPE_mean > 0.8)
-         AND (V-measure_mean >= 0.8 OR ARS_mean >= 0.8 OR AMI_mean >= 0.8)
-    2. Fallback. If the primary condition yields fewer than 4 rows or more than 15, ignore it
-       and instead take the top-3 rows (highest mean) of each of MPC, MPE,
-       V-measure, ARS and AMI. Duplicates allowed here; dropped at the end.
-    3. Always add the top-3 rows (lowest mean) of XBI and FKI.
-    4. Distance metric:
-         - 'euclidean' : also add the top-3 rows (highest mean) of FS and Silh.
-         - otherwise   : drop the FS/Silh columns (mean and std) entirely.
-    5. Drop duplicate parameter combinations.
-
-    Every column access is guarded, so missing columns (e.g. MPE_mean before
-    it is wired into METRICS) are skipped rather than raising.
-    """
-    df = df_initial.copy()
-
-    def top(col, n=3, largest=True):
-        """Top-n rows by `col`, NaNs excluded. Empty frame if col absent."""
-        if col not in df.columns:
-            return df.iloc[0:0]
-        sub = df.dropna(subset=[col])
-        return sub.nlargest(n, col) if largest else sub.nsmallest(n, col)
-
-    # Step 1: primary condition
-    cond_crispness = pd.Series(False, index=df.index)
-    if 'MPC_mean' in df.columns:
-        cond_crispness |= (df['MPC_mean'] >= 0.8)
-    if 'MPE_mean' in df.columns:
-        cond_crispness |= (df['MPE_mean'] > 0.8)
-
-    cond_agreement = pd.Series(False, index=df.index)
-    for c in ('V-measure_mean', 'ARS_mean', 'AMI_mean'):
-        if c in df.columns:
-            cond_agreement |= (df[c] >= 0.8)
-
-    df_cond = df[cond_crispness & cond_agreement]
-
-    # Step 2: fallback if fewer than 4 rows or too many rows in the dataframe (more than 10)
-    if len(df_cond) >= 4 and len(df_cond) <=15:
-        base = df_cond
-    else:
-        base = pd.concat(
-            [top(c, 3, largest=True)
-             for c in ('MPC_mean', 'MPE_mean', 'V-measure_mean', 'ARS_mean', 'AMI_mean')]
-        )
-
-    # Step 3: always add XBI / FKI (minimisers)
-    parts = [base, top('XBI_mean', 3, largest=False), top('FKI_mean', 3, largest=False)]
-
-    # Step 4: distance-metric-specific FS / Silh handling
-    if dist_metric == 'euclidean':
-        parts += [top('FS_mean', 3, largest=True), top('Silh_mean', 3, largest=True)]
-
-    result = pd.concat(parts)
-
-    if dist_metric != 'euclidean':
-        result = result.drop(columns=[c for c in ('FS_mean', 'FS_std', 'Silh_mean', 'Silh_std')
-                                      if c in result.columns])
-
-    # Step 5: drop duplicate parameter combinations
-    param_cols = [c for c in result.columns
-                  if c.startswith('param_') or c.startswith('params_')]
-    if param_cols:
-        result = result.drop_duplicates(subset=param_cols)
-    else:
-        result = result.drop_duplicates()
-
-    return result.reset_index(drop=True)
-
 PARAM_SETTERS = {
     "param_m":    lambda mdl, v: setattr(mdl, "m", v),
     "param_lam":  lambda mdl, v: setattr(mdl, "lambda_", v),
@@ -515,12 +441,6 @@ def create_df_threshold_alpha(model, data, n_clusters_merge, dist_metric, size, 
     sweeping the alpha values in GRIDS[size]["alpha"].
     df: already has the parameters that we want to play with. 
     """
-    # BORRAR
-    # if model == "FCM" or model == "eFCM":
-    #     df_filtered = df
-    # else:
-    #     # df_filtered = filter_extremes(df, dist_metric) # BORRAR
-    #     df_filtered = filter_best_ranking(df)
 
     df_filtered = df.copy()
 
@@ -649,11 +569,6 @@ def fuzzy_silhouette(X, u):
     k = len(np.unique(labels)) # number of different clusters
     if k < 2 or k > len(labels) - 1:
         return np.nan
-    # BORRAR
-    # try:
-    #     s = silhouette_samples(X, labels, metric="euclidean")  
-    # except Exception:
-    #     return np.nan
     s = silhouette_samples(X, labels, metric="euclidean")  
     
     # Two largest memberships per row
@@ -739,7 +654,6 @@ def covariance_matrix(X, u, centers):
         w = um[:, j]                               
         denom = w.sum()  # sum of the whole column j
         denom = denom if denom > 1e-10 else 1e-10
-        # P[j] = (diff * w[:, None]).T @ diff / denom     # BORRAR
 
         # diff[:, :, None] becomes a stack of N matrices, each sized n x 1
         # diff[:, None, :] becomes a stack of N matrices, each sized 1 x n
